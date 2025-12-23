@@ -1,0 +1,5 @@
+{
+  "name": "Training Package Design Course",
+  "description": "A comprehensive platform for bag design training management, featuring role-based dashboards for Admins, Trainers, and Trainees to manage assignments, files, and meetings.",
+  "requestFramePermissions": []
+}
