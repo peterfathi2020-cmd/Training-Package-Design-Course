@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
 import { User, FileRecord, Meeting, Resource } from '../types';
 import { Card, Badge, Button, Input, Select } from '../components/ui';
-import { Users, File, Video, MessageSquare, CheckCircle, Upload, Link as LinkIcon, BookOpen, Library, AlignLeft, Send, Download, Calendar, Save, Settings, Lock, Phone, Trash2, FileText } from 'lucide-react';
+import { Users, File, Video, MessageSquare, CheckCircle, Upload, Link as LinkIcon, BookOpen, Library, AlignLeft, Send, Download, Calendar, Save, Settings, Lock, Phone, Trash2, FileText, Cloud, FolderOpen } from 'lucide-react';
 
 export default function TrainerDashboard({ user }: { user: User }) {
   const [trainees, setTrainees] = useState<User[]>([]);
@@ -139,6 +139,11 @@ export default function TrainerDashboard({ user }: { user: User }) {
       refreshData();
   }
 
+  const handleDownloadFile = (file: FileRecord) => {
+      // Simulate file download
+      alert(`جاري تحميل الملف: ${file.filename}\n(في البيئة الحقيقية سيتم تحميل الملف من السحابة)`);
+  };
+
   const handleAttendanceSubmit = (e: React.FormEvent) => {
       e.preventDefault();
       const recordsToSave = Object.entries(attData).map(([traineeId, isPresent]) => ({
@@ -200,7 +205,7 @@ export default function TrainerDashboard({ user }: { user: User }) {
                </div>
            </Card>
 
-           <Card title="المتدربين التابعين لي">
+           <Card title="المتدربين التابعين لي" action={<Badge color="green">{trainees.length}</Badge>}>
              <div className="space-y-4 max-h-60 overflow-y-auto">
                 {trainees.map(t => (
                     <div key={t.id} className="p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-white dark:hover:bg-gray-700 transition-colors">
@@ -229,9 +234,9 @@ export default function TrainerDashboard({ user }: { user: User }) {
                         onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
                         />
                         <label htmlFor="trainer-file-upload" className="cursor-pointer block w-full h-full">
-                            <Upload className="mx-auto text-blue-400 mb-2 group-hover:scale-110 transition-transform" size={20} />
+                            <Cloud className="mx-auto text-blue-400 mb-2 group-hover:scale-110 transition-transform" size={20} />
                             <span className="text-xs text-blue-800 dark:text-blue-300 font-medium truncate block">
-                                {uploadFile ? uploadFile.name : 'اختر الملف (واجب/ملاحظات)'}
+                                {uploadFile ? uploadFile.name : 'اختر الملف لرفعه'}
                             </span>
                         </label>
                     </div>
@@ -311,7 +316,7 @@ export default function TrainerDashboard({ user }: { user: User }) {
                 </form>
             </Card>
 
-            <Card title="تصحيح الواجبات ومتابعة الملفات" action={<Badge color="purple">خاص بمجموعتك</Badge>}>
+            <Card title="مدير ملفات المتدربين (السحابة)" action={<Badge color="purple">{files.length} ملف</Badge>}>
                 <div className="space-y-6">
                     {files.map(f => (
                         <div key={f.id} className={`border rounded-xl p-4 transition-all ${f.status === 'graded' ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-sm'}`}>
@@ -330,8 +335,11 @@ export default function TrainerDashboard({ user }: { user: User }) {
                                     </p>
                                     <p className="text-gray-700 dark:text-gray-300 mt-2 bg-gray-50 dark:bg-gray-700/50 p-2 rounded text-sm italic">"{f.description}"</p>
                                     
-                                    <button className="text-xs text-blue-600 hover:underline mt-2 flex items-center gap-1">
-                                        <Download size={12} /> تحميل الملف
+                                    <button 
+                                        onClick={() => handleDownloadFile(f)}
+                                        className="text-sm bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 hover:bg-blue-200 px-3 py-1 rounded mt-3 flex items-center gap-2 transition-colors"
+                                    >
+                                        <Download size={14} /> تحميل الملف
                                     </button>
                                 </div>
                                 {f.status === 'graded' && !editingFile && (
@@ -388,7 +396,12 @@ export default function TrainerDashboard({ user }: { user: User }) {
                             )}
                         </div>
                     ))}
-                    {files.length === 0 && <p className="text-center text-gray-400 py-10">لا توجد ملفات تحتاج للمراجعة</p>}
+                    {files.length === 0 && (
+                        <div className="text-center py-10 text-gray-400 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl">
+                            <FolderOpen size={48} className="mx-auto mb-4 opacity-20" />
+                            <p>لا توجد ملفات مرفوعة من طلابك بعد.</p>
+                        </div>
+                    )}
                 </div>
             </Card>
 

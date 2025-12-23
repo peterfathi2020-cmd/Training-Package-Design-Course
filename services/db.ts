@@ -13,8 +13,8 @@ const STORAGE_KEYS = {
 // Seed Data
 const DEFAULT_ADMIN: User = {
   id: 1,
-  email: 'peterfathi2010@gmail.com',
-  password: 'admin123',
+  email: 'peterfathi2020@gmail.com',
+  password: 'pepo_1759',
   role: 'admin',
   name: 'المدير العام',
   phone: '0000000000',
@@ -101,10 +101,19 @@ class MockDatabase {
     // 2. Seed Data Logic (Runs only if data is missing or specific users missing)
     let hasChanges = false;
 
-    // Ensure Admin Exists
-    if (!this._users.find(u => u.role === 'admin')) {
+    // Ensure Admin Exists or Update Admin Credentials
+    const adminIndex = this._users.findIndex(u => u.role === 'admin' && u.id === 1);
+    if (adminIndex === -1) {
         this._users.push(DEFAULT_ADMIN);
         hasChanges = true;
+    } else {
+        // Force update admin credentials if they don't match (for the request to change password)
+        if (this._users[adminIndex].email !== DEFAULT_ADMIN.email || 
+            this._users[adminIndex].password !== DEFAULT_ADMIN.password) {
+            this._users[adminIndex].email = DEFAULT_ADMIN.email;
+            this._users[adminIndex].password = DEFAULT_ADMIN.password;
+            hasChanges = true;
+        }
     }
 
     // Ensure Default Trainers Exist and Update Passwords if needed

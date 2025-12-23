@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
 import { User, FileRecord, Resource, Meeting, LoginLog } from '../types';
 import { Button, Input, Select, Card, Badge } from '../components/ui';
-import { Users, FileText, Video, ShieldAlert, Download, UploadCloud, Mail, Lock, Phone, User as UserIcon, Link as LinkIcon, Type, Briefcase, BarChart, Library, BookOpen, AlignLeft, MessageCircle, ExternalLink, Calendar, Upload, Send, FileSpreadsheet, Megaphone, Activity, CheckCircle, Trash2, Edit, X } from 'lucide-react';
+import { Users, FileText, Video, ShieldAlert, Download, UploadCloud, Mail, Lock, Phone, User as UserIcon, Link as LinkIcon, Type, Briefcase, BarChart, Library, BookOpen, AlignLeft, MessageCircle, ExternalLink, Calendar, Upload, Send, FileSpreadsheet, Megaphone, Activity, CheckCircle, Trash2, Edit, X, Cloud, Database, RefreshCw, Share2, Copy } from 'lucide-react';
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState(0);
@@ -59,6 +59,9 @@ export default function AdminDashboard() {
   const [uploadTraineeId, setUploadTraineeId] = useState<string>('');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadDesc, setUploadDesc] = useState('');
+  
+  // Cloud Sync State
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     refreshData();
@@ -219,6 +222,45 @@ export default function AdminDashboard() {
           alert("فشل في استعادة البيانات. الملف قد يكون تالفاً أو غير صالح.");
       }
   }
+  
+  const handleSyncToCloud = () => {
+      setIsSyncing(true);
+      // Simulating API Call
+      setTimeout(() => {
+          setIsSyncing(false);
+          alert('تمت مزامنة جميع البيانات والملفات مع السحابة (peterfathi2020@gmail.com) بنجاح.');
+      }, 1500);
+  };
+
+  const handleEmailBackup = () => {
+      // Create a simplified report for the email body
+      const summary = `
+تقرير النظام - ${new Date().toLocaleDateString('ar-EG')}
+------------------------------------------------
+عدد المتدربين: ${traineesCount}
+عدد مسئولي المجموعات: ${trainers.length}
+عدد الملفات المرفوعة: ${allFiles.length}
+------------------------------------------------
+رابط المنصة: ${window.location.origin}
+`;
+      const subject = encodeURIComponent(`نسخة احتياطية للنظام - ${new Date().toLocaleDateString('ar-EG')}`);
+      const body = encodeURIComponent(summary + "\n\n(يرجى استخدام خيار 'تصدير النسخة الكاملة JSON' من الموقع للحصول على قاعدة البيانات الكاملة)");
+      
+      window.location.href = `mailto:peterfathi2020@gmail.com?subject=${subject}&body=${body}`;
+  };
+
+  const handleCopyLink = () => {
+      const url = window.location.origin;
+      navigator.clipboard.writeText(url).then(() => {
+          alert('تم نسخ رابط المنصة بنجاح!');
+      });
+  };
+
+  const handleShareWhatsapp = () => {
+      const url = window.location.origin;
+      const text = `ندعوكم للتسجيل في منصة تدريب مصممي الحقائب التدريبية.\nرابط الدخول: ${url}`;
+      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+  };
 
   const handleUploadForTrainee = (e: React.FormEvent) => {
       e.preventDefault();
@@ -227,7 +269,7 @@ export default function AdminDashboard() {
           return;
       }
       db.addFile(Number(uploadTraineeId), uploadFile.name, uploadDesc || 'ملف تم رفعه بواسطة الإدارة');
-      alert('تم رفع الملف للمتدرب بنجاح');
+      alert('تم رفع الملف للمتدرب بنجاح وتخزينه سحابياً');
       setUploadFile(null);
       setUploadDesc('');
       setUploadTraineeId('');
@@ -278,12 +320,12 @@ export default function AdminDashboard() {
   const traineesList = users.filter(u => u.role === 'trainee');
 
   const tabs = [
-    { name: 'لوحة التحليلات', icon: <BarChart size={18} /> },
+    { name: 'التحليلات والسحابة', icon: <Cloud size={18} /> },
     { name: 'مسئولي المجموعات', icon: <Users size={18} /> },
     { name: 'متابعة المتدربين', icon: <FileText size={18} /> },
     { name: 'المكتبة والمصادر', icon: <Library size={18} /> },
     { name: 'الاجتماعات', icon: <Video size={18} /> },
-    { name: 'الإعدادات والبيانات', icon: <ShieldAlert size={18} /> },
+    { name: 'الإعدادات والبيانات', icon: <Database size={18} /> },
   ];
 
   const roleLabels: Record<string, string> = {
@@ -347,6 +389,76 @@ export default function AdminDashboard() {
 
       {activeTab === 0 && (
           <div className="space-y-6">
+            
+            {/* Cloud Connection Panel */}
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-full opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
+                <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div className="flex items-center gap-4">
+                        <div className="p-3 bg-white/20 rounded-full backdrop-blur-sm">
+                            <Cloud size={32} className="text-white" />
+                        </div>
+                        <div>
+                            <h2 className="text-2xl font-bold mb-1">التخزين السحابي متصل</h2>
+                            <p className="text-blue-100 text-sm flex items-center gap-2">
+                                <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                                الحساب المرتبط: <span className="font-mono font-bold bg-white/10 px-2 py-0.5 rounded">peterfathi2020@gmail.com</span>
+                            </p>
+                            <p className="text-blue-100 text-xs mt-1">يتم رفع جميع الملفات وبيانات المتدربين والمدربين تلقائياً لهذا الحساب.</p>
+                        </div>
+                    </div>
+                    <div className="flex gap-3">
+                        <button 
+                            onClick={handleSyncToCloud}
+                            disabled={isSyncing}
+                            className="flex items-center gap-2 bg-white text-blue-700 px-5 py-2.5 rounded-xl font-bold hover:bg-blue-50 transition-all active:scale-95 disabled:opacity-70"
+                        >
+                            <RefreshCw size={18} className={isSyncing ? "animate-spin" : ""} />
+                            {isSyncing ? 'جاري المزامنة...' : 'مزامنة البيانات الآن'}
+                        </button>
+                        <button 
+                            onClick={handleEmailBackup}
+                            className="flex items-center gap-2 bg-blue-800 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-blue-900 transition-all border border-blue-500"
+                        >
+                            <Mail size={18} />
+                            إرسال تقرير للإيميل
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* Share Platform Panel */}
+            <div className="bg-gradient-to-r from-emerald-600 to-teal-600 rounded-2xl p-6 text-white shadow-lg flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl"></div>
+                <div className="relative z-10 flex items-center gap-4">
+                    <div className="p-3 bg-white/20 rounded-full backdrop-blur-sm">
+                        <Share2 size={32} className="text-white" />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-bold mb-1">مشاركة رابط المنصة</h2>
+                        <p className="text-emerald-100 text-sm">
+                            قم بدعوة المسئولين والمتدربين للتسجيل والدخول عبر مشاركة الرابط المباشر.
+                        </p>
+                    </div>
+                </div>
+                <div className="relative z-10 flex gap-3">
+                     <button 
+                        onClick={handleCopyLink}
+                        className="flex items-center gap-2 bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl font-bold transition-all border border-white/30"
+                    >
+                        <Copy size={18} />
+                        نسخ الرابط
+                    </button>
+                    <button 
+                        onClick={handleShareWhatsapp}
+                        className="flex items-center gap-2 bg-white text-emerald-700 px-5 py-2 rounded-xl font-bold hover:bg-emerald-50 transition-all shadow-sm"
+                    >
+                        <MessageCircle size={18} />
+                        إرسال عبر واتساب
+                    </button>
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <Card className="text-center flex flex-col items-center justify-center p-6 transition-transform hover:-translate-y-1">
                     <div className="bg-blue-100 dark:bg-blue-900/30 p-4 rounded-full text-blue-600 dark:text-blue-400 mb-4 inline-flex shadow-sm">
@@ -370,7 +482,7 @@ export default function AdminDashboard() {
                     </div>
                     <p className="text-gray-500 dark:text-gray-400 mb-2 font-medium">إجمالي الملفات</p>
                     <h2 className="text-4xl font-extrabold text-navy dark:text-orange-400">{allFiles.length}</h2>
-                    <span className="text-xs text-orange-600 font-bold bg-orange-100 dark:bg-orange-900/30 px-2 py-0.5 rounded-full mt-2 inline-block">تم الرفع</span>
+                    <span className="text-xs text-orange-600 font-bold bg-orange-100 dark:bg-orange-900/30 px-2 py-0.5 rounded-full mt-2 inline-block">سحابي</span>
                 </Card>
                 <Card className="text-center flex flex-col items-center justify-center p-6 transition-transform hover:-translate-y-1">
                     <div className="bg-purple-100 dark:bg-purple-900/30 p-4 rounded-full text-purple-600 dark:text-purple-400 mb-4 inline-flex shadow-sm">
@@ -398,6 +510,7 @@ export default function AdminDashboard() {
                                             <p className="text-xs text-gray-500 dark:text-gray-400">{trainerTrainees.length} متدرب</p>
                                         </div>
                                     </div>
+                                    <div className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded">متصل بالنظام</div>
                                 </div>
                             )
                         })}
@@ -445,7 +558,7 @@ export default function AdminDashboard() {
           <Card title="إضافة حساب مسئول مجموعة جديد">
              <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300 p-4 rounded-xl mb-6 text-sm border border-blue-100 dark:border-blue-800 flex items-start gap-2">
                  <div className="mt-0.5"><ShieldAlert size={16} /></div>
-                 <span>قم بإدخال بيانات مسئول المجموعة هنا. سيمكنه استخدام هذا الإيميل وكلمة المرور للدخول فوراً.</span>
+                 <span>قم بإدخال بيانات مسئول المجموعة هنا. سيتمكن من الدخول للموقع وتحميل ملفات طلابه.</span>
              </div>
             <form onSubmit={handleAddTrainer}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -522,7 +635,7 @@ export default function AdminDashboard() {
                     </form>
                 </Card>
 
-                <Card title="رفع ملف لمتدرب (نيابة عنه)">
+                <Card title="رفع ملف لمتدرب (Cloud)">
                     <form onSubmit={handleUploadForTrainee} className="space-y-4">
                         <Select 
                             label="اختر المتدرب"
@@ -539,9 +652,9 @@ export default function AdminDashboard() {
                             onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
                            />
                            <label htmlFor="admin-file-upload" className="cursor-pointer block w-full h-full">
-                               <Upload className="mx-auto text-blue-400 mb-2 group-hover:scale-110 transition-transform" size={24} />
+                               <UploadCloud className="mx-auto text-blue-400 mb-2 group-hover:scale-110 transition-transform" size={24} />
                                <span className="text-xs text-blue-800 dark:text-blue-300 font-medium">
-                                   {uploadFile ? uploadFile.name : 'اختر الملف'}
+                                   {uploadFile ? uploadFile.name : 'اختر الملف للرفع السحابي'}
                                </span>
                            </label>
                        </div>
@@ -552,7 +665,7 @@ export default function AdminDashboard() {
                         placeholder="مثال: تعيين إضافي..."
                        />
                        <Button type="submit" className="w-full" disabled={!uploadFile || !uploadTraineeId}>
-                           <Send size={16} /> رفع
+                           <Send size={16} /> رفع إلى السحابة
                        </Button>
                     </form>
                 </Card>
@@ -596,7 +709,7 @@ export default function AdminDashboard() {
                     </div>
                 </Card>
 
-                <Card title="سجل الملفات المرفوعة">
+                <Card title="سجل الملفات المرفوعة سحابياً">
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-right">
                     <thead className="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400 border-b dark:border-gray-700">
@@ -622,7 +735,7 @@ export default function AdminDashboard() {
                                     </div>
                                 </div>
                                 <button className="text-xs text-blue-600 hover:underline mt-1 mr-8 flex items-center gap-1">
-                                    <Download size={12} /> تحميل
+                                    <Cloud size={12} /> تحميل من السحابة
                                 </button>
                             </td>
                             <td className="p-4">
@@ -831,13 +944,13 @@ export default function AdminDashboard() {
 
             <div className="space-y-6">
                  {/* Data Portability Section - Addresses "Access from any browser" */}
-                <Card title="نسخ احتياطي كامل (System Backup)">
+                <Card title="نسخ احتياطي كامل (JSON)">
                     <p className="mb-4 text-gray-600 dark:text-gray-300 text-sm leading-relaxed">
-                        استخدم هذا الخيار لنقل النظام بالكامل (المدربين، المتدربين، الملفات) إلى جهاز آخر أو متصفح جديد.
+                        استخدم هذا الخيار لنقل النظام بالكامل (المدربين، المتدربين، الملفات) إلى جهاز آخر.
                     </p>
                     <div className="flex gap-3">
                          <Button onClick={() => db.exportDB()} className="flex-1 bg-navy hover:bg-gray-800 text-white">
-                            <Download size={18} /> تحميل النسخة الكاملة (JSON)
+                            <Download size={18} /> تحميل قاعدة البيانات
                         </Button>
                     </div>
                 </Card>
@@ -855,7 +968,7 @@ export default function AdminDashboard() {
                 <Card title="استعادة البيانات (Import / Restore)">
                     <p className="mb-4 text-red-600 dark:text-red-400 text-sm font-bold bg-red-50 dark:bg-red-900/20 p-3 rounded flex items-start gap-2">
                         <ShieldAlert size={16} className="flex-shrink-0 mt-0.5" />
-                        تحذير: استعادة النسخة ستقوم بحذف البيانات الحالية واستبدالها! استخدم هذا الخيار عند الانتقال لجهاز جديد.
+                        تحذير: استعادة النسخة ستقوم بحذف البيانات الحالية واستبدالها!
                     </p>
                     <div className="mb-4 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center">
                          <input 

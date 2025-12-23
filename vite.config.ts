@@ -18,6 +18,19 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve('.'),
         }
+      },
+      build: {
+        outDir: 'dist',
+        sourcemap: false,
+        rollupOptions: {
+            output: {
+                manualChunks: {
+                    vendor: ['react', 'react-dom', 'lucide-react'],
+                    // Separate GenAI to manage bundle size
+                    genai: ['@google/genai']
+                }
+            }
+        }
       }
     };
 });
