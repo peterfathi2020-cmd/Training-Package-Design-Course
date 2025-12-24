@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
 import { User, FileRecord, Resource, Meeting, LoginLog } from '../types';
 import { Button, Input, Select, Card, Badge } from '../components/ui';
-import { Users, FileText, Video, ShieldAlert, Download, UploadCloud, Mail, Lock, Phone, User as UserIcon, Link as LinkIcon, Type, Briefcase, BarChart, Library, BookOpen, AlignLeft, MessageCircle, ExternalLink, Calendar, Upload, Send, FileSpreadsheet, Megaphone, Activity, CheckCircle, Trash2, Edit, X, Cloud, Database, RefreshCw, Share2, Copy } from 'lucide-react';
+import { Users, FileText, Video, ShieldAlert, Download, UploadCloud, Mail, Lock, Phone, User as UserIcon, Link as LinkIcon, Type, Briefcase, BarChart, Library, BookOpen, AlignLeft, MessageCircle, ExternalLink, Calendar, Upload, Send, FileSpreadsheet, Megaphone, Activity, CheckCircle, Trash2, Edit, X, Cloud, Database, RefreshCw, Share2, Copy, Wifi, WifiOff, Globe } from 'lucide-react';
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState(0);
@@ -12,6 +12,7 @@ export default function AdminDashboard() {
   const [resources, setResources] = useState<Resource[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loginLogs, setLoginLogs] = useState<LoginLog[]>([]);
+  const [isCloud, setIsCloud] = useState(db.isCloudConnected);
   
   // Editing State
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -59,12 +60,20 @@ export default function AdminDashboard() {
   const [uploadTraineeId, setUploadTraineeId] = useState<string>('');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadDesc, setUploadDesc] = useState('');
+  const [uploadLink, setUploadLink] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
   
-  // Cloud Sync State
-  const [isSyncing, setIsSyncing] = useState(false);
+  // Firebase Config State
+  const [fbConfigJson, setFbConfigJson] = useState('');
+  const [showFbModal, setShowFbModal] = useState(false);
 
   useEffect(() => {
     refreshData();
+    // Real-time listener for multi-tab sync
+    const unsubscribe = db.subscribe(() => {
+        refreshData();
+    });
+    return () => unsubscribe();
   }, []);
 
   const refreshData = () => {
@@ -75,6 +84,7 @@ export default function AdminDashboard() {
     setMeetings(db.getMeetings().reverse()); // Show newest first
     setAnnouncementText(db.getAnnouncement());
     setLoginLogs(db.getLoginLogs());
+    setIsCloud(db.isCloudConnected);
   };
 
   const handleAddTrainer = (e: React.FormEvent) => {
@@ -90,9 +100,9 @@ export default function AdminDashboard() {
             });
             alert(`تم إنشاء حساب مسئول المجموعة '${tName}' بنجاح!`);
             setTName(''); setTEmail(''); setTPass(''); setTPhone('');
-            refreshData();
+            // refreshData called automatically via db subscription
         } catch (err: any) {
-            alert("خطأ: هذا البريد الإلكتروني مسجل مسبقاً لمستخدم آخر.");
+            alert("خطأ: " + err.message);
         }
     } else {
         alert("الرجاء ملء جميع الحقول المطلوبة.");
@@ -116,9 +126,8 @@ export default function AdminDashboard() {
           });
           alert(`تم إضافة المتدرب '${trName}' بنجاح!`);
           setTrName(''); setTrEmail(''); setTrPass(''); setTrPhone(''); setTrTrainerId('');
-          refreshData();
       } catch (err: any) {
-          alert("خطأ: البريد الإلكتروني مسجل مسبقاً");
+          alert("خطأ: " + err.message);
       }
   }
 
@@ -127,7 +136,6 @@ export default function AdminDashboard() {
           try {
               db.deleteUser(id);
               alert("تم الحذف بنجاح.");
-              refreshData();
           } catch (e: any) {
               alert(e.message);
           }
@@ -161,7 +169,6 @@ export default function AdminDashboard() {
       db.updateUser(editingUser.id, updates);
       alert("تم تحديث البيانات بنجاح");
       setEditingUser(null);
-      refreshData();
   };
 
   const handleAddMeeting = (e: React.FormEvent) => {
@@ -179,7 +186,6 @@ export default function AdminDashboard() {
     });
     alert('تم نشر الاجتماع');
     setMLink(''); setMTopic(''); setMTarget('all'); setMGroupId('');
-    refreshData();
   };
 
   const handleAddResource = (e: React.FormEvent) => {
@@ -194,22 +200,25 @@ export default function AdminDashboard() {
       });
       alert('تمت إضافة المصدر للمكتبة');
       setRTitle(''); setRDesc(''); setRLink(''); setRType('pdf');
-      refreshData();
   }
 
   const handleUpdateAnnouncement = () => {
       db.setAnnouncement(announcementText);
       alert('تم تحديث التنبيه العام. سيظهر لجميع المستخدمين.');
-      window.location.reload(); // To see it immediately in layout
+      if(!isCloud) window.location.reload(); 
   }
 
   const handleRestoreBackup = async () => {
+      if (isCloud) {
+          alert("لا يمكن استعادة نسخة احتياطية محلية أثناء الاتصال بقاعدة بيانات سحابية. يرجى قطع الاتصال أولاً.");
+          return;
+      }
       if (!restoreFile) {
           alert("يرجى اختيار ملف النسخة الاحتياطية (JSON)");
           return;
       }
 
-      if (!window.confirm("تحذير: استعادة النسخة الاحتياطية سيقوم بحذف جميع البيانات الحالية واستبدالها بالبيانات الموجودة في الملف. هل أنت متأكد؟")) {
+      if (!window.confirm("تحذير: استعادة النسخة الاحتياطية سيقوم بحذف جميع البيانات الحالية واستبدالها. هل أنت متأكد؟")) {
           return;
       }
 
@@ -223,13 +232,20 @@ export default function AdminDashboard() {
       }
   }
   
-  const handleSyncToCloud = () => {
-      setIsSyncing(true);
-      // Simulating API Call
-      setTimeout(() => {
-          setIsSyncing(false);
-          alert('تمت مزامنة جميع البيانات والملفات مع السحابة (peterfathi2020@gmail.com) بنجاح.');
-      }, 1500);
+  const handleConnectCloud = () => {
+      try {
+          const config = JSON.parse(fbConfigJson);
+          if(!config.apiKey || !config.projectId) throw new Error("بيانات غير مكتملة");
+          db.saveCloudConfig(config);
+      } catch (e) {
+          alert("تنسيق JSON غير صحيح. تأكد من نسخ كائن الإعدادات بشكل صحيح من Firebase.");
+      }
+  };
+
+  const handleDisconnectCloud = () => {
+      if(window.confirm("هل تريد قطع الاتصال بقاعدة البيانات السحابية والعودة للوضع المحلي؟")) {
+          db.disconnectCloud();
+      }
   };
 
   const handleEmailBackup = () => {
@@ -262,24 +278,40 @@ export default function AdminDashboard() {
       window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
-  const handleUploadForTrainee = (e: React.FormEvent) => {
+  const handleUploadForTrainee = async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!uploadTraineeId || !uploadFile) {
-          alert('يرجى اختيار المتدرب والملف');
+      if (!uploadTraineeId || (!uploadFile && !uploadLink)) {
+          alert('يرجى اختيار المتدرب وملف أو رابط');
           return;
       }
-      db.addFile(Number(uploadTraineeId), uploadFile.name, uploadDesc || 'ملف تم رفعه بواسطة الإدارة');
-      alert('تم رفع الملف للمتدرب بنجاح وتخزينه سحابياً');
-      setUploadFile(null);
-      setUploadDesc('');
-      setUploadTraineeId('');
-      refreshData();
+      setIsUploading(true);
+      try {
+        let fileUrl = uploadLink || undefined;
+        if (uploadFile && db.isCloudConnected) {
+             fileUrl = await db.uploadFileToCloud(uploadFile, 'admin_uploads');
+        }
+
+        await db.addFile(
+            Number(uploadTraineeId), 
+            uploadFile ? uploadFile.name : 'رابط خارجي', 
+            uploadDesc || 'ملف تم رفعه بواسطة الإدارة',
+            fileUrl
+        );
+        alert('تم رفع البيانات للمتدرب بنجاح');
+        setUploadFile(null);
+        setUploadDesc('');
+        setUploadLink('');
+        setUploadTraineeId('');
+      } catch (error: any) {
+         alert("خطأ في الرفع: " + error.message);
+      } finally {
+        setIsUploading(false);
+      }
   }
 
   // Helper to format phone for WhatsApp (Simple Egyptian formatting assumption)
   const formatPhoneForWhatsapp = (phone: string) => {
       let p = phone.trim();
-      // Replace leading 0 with 20 (Egypt code) if it looks like a local mobile number
       if (p.startsWith('01')) {
           p = '20' + p.substring(1);
       }
@@ -301,7 +333,6 @@ export default function AdminDashboard() {
       if (m.target_audience === 'all') return users.filter(u => u.phone);
       if (m.target_audience === 'trainers') return trainers.filter(u => u.phone);
       if (m.target_audience === 'group' && m.target_group_id) {
-          // Get the trainer and his trainees
           const targetTrainer = trainers.find(t => t.id === m.target_group_id);
           const trainees = users.filter(u => u.assigned_trainer_id === m.target_group_id);
           const list = [...trainees];
@@ -315,8 +346,6 @@ export default function AdminDashboard() {
   const traineesCount = users.filter(u => u.role === 'trainee').length;
   const gradedFilesCount = allFiles.filter(f => f.status === 'graded').length;
   const activeTrainers = trainers.filter(t => users.some(u => u.assigned_trainer_id === t.id));
-
-  // Get only trainees for the dropdown
   const traineesList = users.filter(u => u.role === 'trainee');
 
   const tabs = [
@@ -336,6 +365,30 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-6">
+      {/* Firebase Config Modal */}
+      {showFbModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+              <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-lg shadow-2xl p-6">
+                  <h3 className="text-xl font-bold mb-4 flex items-center gap-2 text-navy dark:text-white">
+                      <Globe size={24} className="text-blue-500" /> إعداد الاتصال السحابي (Firebase)
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-300 mb-4">
+                      لجعل التطبيق يعمل أونلاين من أي جهاز، قم بإنشاء مشروع جديد على <a href="https://console.firebase.google.com" target="_blank" className="text-blue-500 underline">Firebase Console</a>، ثم انسخ كائن الإعدادات (firebaseConfig) والصقه هنا.
+                  </p>
+                  <textarea 
+                    className="w-full h-40 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl p-3 font-mono text-xs mb-4"
+                    placeholder='{ "apiKey": "...", "authDomain": "...", ... }'
+                    value={fbConfigJson}
+                    onChange={(e) => setFbConfigJson(e.target.value)}
+                  ></textarea>
+                  <div className="flex gap-3">
+                      <Button onClick={handleConnectCloud} className="flex-1">اتصال وحفظ</Button>
+                      <Button onClick={() => setShowFbModal(false)} variant="secondary">إلغاء</Button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* Edit User Modal */}
       {editingUser && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
@@ -390,39 +443,44 @@ export default function AdminDashboard() {
       {activeTab === 0 && (
           <div className="space-y-6">
             
-            {/* Cloud Connection Panel */}
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
+            {/* Cloud Status Panel */}
+            <div className={`rounded-2xl p-6 text-white shadow-lg relative overflow-hidden transition-all duration-500 ${isCloud ? 'bg-gradient-to-r from-blue-600 to-indigo-700' : 'bg-gradient-to-r from-gray-600 to-gray-700'}`}>
                 <div className="absolute top-0 left-0 w-full h-full opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
                 <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
                     <div className="flex items-center gap-4">
-                        <div className="p-3 bg-white/20 rounded-full backdrop-blur-sm">
-                            <Cloud size={32} className="text-white" />
+                        <div className={`p-3 rounded-full backdrop-blur-sm ${isCloud ? 'bg-green-400/20' : 'bg-white/20'}`}>
+                            {isCloud ? <Wifi size={32} className="text-green-300" /> : <WifiOff size={32} className="text-gray-300" />}
                         </div>
                         <div>
-                            <h2 className="text-2xl font-bold mb-1">التخزين السحابي متصل</h2>
-                            <p className="text-blue-100 text-sm flex items-center gap-2">
-                                <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-                                الحساب المرتبط: <span className="font-mono font-bold bg-white/10 px-2 py-0.5 rounded">peterfathi2020@gmail.com</span>
+                            <h2 className="text-2xl font-bold mb-1 flex items-center gap-2">
+                                {isCloud ? 'متصل بقاعدة البيانات العالمية' : 'الوضع المحلي (Offline Mode)'}
+                                {isCloud && <span className="bg-green-400 text-green-900 text-xs px-2 py-0.5 rounded-full font-bold">Live</span>}
+                            </h2>
+                            <p className="text-blue-100 text-sm">
+                                {isCloud 
+                                    ? 'يتم الآن مزامنة جميع البيانات لحظياً بين جميع الأجهزة (الإدارة، المسئولين، المتدربين).'
+                                    : 'تعمل البيانات على هذا الجهاز فقط. للربط بين الأجهزة، قم بتفعيل الاتصال السحابي.'}
                             </p>
-                            <p className="text-blue-100 text-xs mt-1">يتم رفع جميع الملفات وبيانات المتدربين والمدربين تلقائياً لهذا الحساب.</p>
                         </div>
                     </div>
                     <div className="flex gap-3">
-                        <button 
-                            onClick={handleSyncToCloud}
-                            disabled={isSyncing}
-                            className="flex items-center gap-2 bg-white text-blue-700 px-5 py-2.5 rounded-xl font-bold hover:bg-blue-50 transition-all active:scale-95 disabled:opacity-70"
-                        >
-                            <RefreshCw size={18} className={isSyncing ? "animate-spin" : ""} />
-                            {isSyncing ? 'جاري المزامنة...' : 'مزامنة البيانات الآن'}
-                        </button>
-                        <button 
-                            onClick={handleEmailBackup}
-                            className="flex items-center gap-2 bg-blue-800 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-blue-900 transition-all border border-blue-500"
-                        >
-                            <Mail size={18} />
-                            إرسال تقرير للإيميل
-                        </button>
+                        {!isCloud ? (
+                            <button 
+                                onClick={() => setShowFbModal(true)}
+                                className="flex items-center gap-2 bg-white text-gray-800 px-5 py-2.5 rounded-xl font-bold hover:bg-blue-50 transition-all border border-transparent hover:border-blue-200 shadow-lg"
+                            >
+                                <Globe size={18} />
+                                ربط قاعدة بيانات سحابية
+                            </button>
+                        ) : (
+                            <button 
+                                onClick={handleDisconnectCloud}
+                                className="flex items-center gap-2 bg-red-500/20 text-white border border-red-400/50 px-5 py-2.5 rounded-xl font-bold hover:bg-red-500/30 transition-all"
+                            >
+                                <WifiOff size={18} />
+                                قطع الاتصال
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>
@@ -654,18 +712,30 @@ export default function AdminDashboard() {
                            <label htmlFor="admin-file-upload" className="cursor-pointer block w-full h-full">
                                <UploadCloud className="mx-auto text-blue-400 mb-2 group-hover:scale-110 transition-transform" size={24} />
                                <span className="text-xs text-blue-800 dark:text-blue-300 font-medium">
-                                   {uploadFile ? uploadFile.name : 'اختر الملف للرفع السحابي'}
+                                   {uploadFile ? uploadFile.name : 'اختر ملفاً من جهازك'}
                                </span>
                            </label>
                        </div>
+                       <div className="relative flex items-center gap-2">
+                           <div className="h-px bg-gray-200 dark:bg-gray-700 flex-1"></div>
+                           <span className="text-xs text-gray-400 font-bold">أو</span>
+                           <div className="h-px bg-gray-200 dark:bg-gray-700 flex-1"></div>
+                       </div>
+                       <Input 
+                         label="رابط خارجي (Google Drive/Dropbox)"
+                         value={uploadLink}
+                         onChange={(e) => setUploadLink(e.target.value)}
+                         placeholder="https://..."
+                         icon={LinkIcon}
+                       />
                        <Input 
                         label="وصف الملف" 
                         value={uploadDesc} 
                         onChange={(e) => setUploadDesc(e.target.value)} 
                         placeholder="مثال: تعيين إضافي..."
                        />
-                       <Button type="submit" className="w-full" disabled={!uploadFile || !uploadTraineeId}>
-                           <Send size={16} /> رفع إلى السحابة
+                       <Button type="submit" className="w-full" disabled={!uploadTraineeId || (!uploadFile && !uploadLink) || isUploading} isLoading={isUploading}>
+                           <Send size={16} /> {isUploading ? 'جاري الرفع...' : 'رفع إلى السحابة'}
                        </Button>
                     </form>
                 </Card>
@@ -734,9 +804,15 @@ export default function AdminDashboard() {
                                         <span className="text-[10px] text-gray-400">{f.description}</span>
                                     </div>
                                 </div>
-                                <button className="text-xs text-blue-600 hover:underline mt-1 mr-8 flex items-center gap-1">
-                                    <Cloud size={12} /> تحميل من السحابة
-                                </button>
+                                {f.file_url ? (
+                                    <a href={f.file_url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline mt-1 mr-8 flex items-center gap-1">
+                                        <ExternalLink size={12} /> فتح الرابط
+                                    </a>
+                                ) : (
+                                    <button className="text-xs text-blue-600 hover:underline mt-1 mr-8 flex items-center gap-1">
+                                        <Cloud size={12} /> تحميل من السحابة
+                                    </button>
+                                )}
                             </td>
                             <td className="p-4">
                                 <Badge color={f.status === 'graded' ? 'green' : 'yellow'}>
@@ -757,167 +833,6 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {activeTab === 3 && (
-        <div className="grid lg:grid-cols-2 gap-6">
-            <Card title="إضافة مصدر تعليمي">
-                <form onSubmit={handleAddResource}>
-                    <Input icon={BookOpen} label="عنوان المصدر" value={rTitle} onChange={(e) => setRTitle(e.target.value)} required placeholder="مثال: أساسيات التصميم (PDF)" />
-                    <Input icon={AlignLeft} label="وصف المصدر" value={rDesc} onChange={(e) => setRDesc(e.target.value)} placeholder="وصف مختصر لمحتوى الملف..." />
-                    <Input icon={LinkIcon} label="رابط التحميل / المشاهدة" value={rLink} onChange={(e) => setRLink(e.target.value)} required placeholder="https://..." />
-                    
-                    <div className="mb-4">
-                        <label className="block text-sm font-bold text-navy dark:text-gray-300 mb-2">نوع الملف</label>
-                        <select 
-                            value={rType} 
-                            onChange={(e) => setRType(e.target.value as any)}
-                            className="w-full px-3 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-xl"
-                        >
-                            <option value="pdf">ملف PDF</option>
-                            <option value="video">فيديو</option>
-                            <option value="link">رابط خارجي</option>
-                        </select>
-                    </div>
-                    <Button type="submit" className="w-full">نشر للمكتبة العامة</Button>
-                </form>
-            </Card>
-            <Card title="المصادر الحالية">
-                <div className="space-y-3">
-                    {resources.map(r => (
-                        <div key={r.id} className="flex flex-col p-3 border dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className="bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400 p-2 rounded">
-                                        {r.type === 'pdf' ? <FileText size={18}/> : r.type === 'video' ? <Video size={18}/> : <LinkIcon size={18}/>}
-                                    </div>
-                                    <div>
-                                        <p className="font-bold text-sm text-navy dark:text-gray-200">{r.title}</p>
-                                        <p className="text-xs text-gray-400">{r.created_at}</p>
-                                    </div>
-                                </div>
-                                <a href={r.link} target="_blank" rel="noreferrer" className="text-primary dark:text-blue-400 text-sm font-bold hover:underline">عرض</a>
-                            </div>
-                            {r.description && <p className="text-xs text-gray-500 mt-2 mr-10">{r.description}</p>}
-                        </div>
-                    ))}
-                     {resources.length === 0 && <p className="text-gray-400 text-center py-4">المكتبة فارغة</p>}
-                </div>
-            </Card>
-        </div>
-      )}
-
-      {activeTab === 4 && (
-        <div className="space-y-6">
-            <Card title="إعداد اجتماع Zoom">
-            <form onSubmit={handleAddMeeting}>
-                <Input icon={LinkIcon} label="رابط الاجتماع" value={mLink} onChange={(e) => setMLink(e.target.value)} required placeholder="https://zoom.us/j/..." />
-                <Input icon={Type} label="موضوع الاجتماع" value={mTopic} onChange={(e) => setMTopic(e.target.value)} required placeholder="مناقشة التصاميم..." />
-                
-                <div className="mb-4">
-                <label className="block text-sm font-bold text-navy dark:text-gray-300 mb-2">الموجه لهم</label>
-                <div className="relative group">
-                    <Users className="absolute right-3 top-3 text-gray-400 pointer-events-none group-focus-within:text-primary" size={18} />
-                    <select 
-                        value={mTarget} 
-                        onChange={(e) => setMTarget(e.target.value as any)}
-                        className="w-full pr-10 pl-3 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none shadow-sm text-gray-900 dark:text-white"
-                    >
-                        <option value="all">الجميع</option>
-                        <option value="trainers">مسئولي المجموعات فقط</option>
-                        <option value="group">مجموعة محددة</option>
-                    </select>
-                </div>
-                </div>
-
-                {mTarget === 'group' && (
-                    <div className="mb-4 animate-fadeIn">
-                        <Select 
-                            icon={Briefcase}
-                            label="اختر مسئول المجموعة"
-                            value={mGroupId}
-                            onChange={(e) => setMGroupId(e.target.value)}
-                            options={trainers.map(t => ({ label: `مجموعة: ${t.name}`, value: t.id }))}
-                        />
-                    </div>
-                )}
-
-                <Button type="submit" className="w-full">نشر الاجتماع</Button>
-            </form>
-            </Card>
-
-            {meetings.length > 0 && (
-                <div className="grid gap-4">
-                    <h3 className="text-xl font-bold text-navy dark:text-gray-200 px-2">الاجتماعات النشطة</h3>
-                    {meetings.map(m => {
-                        const recipients = getMeetingRecipients(m);
-                        const isExpanded = expandedMeetingId === m.id;
-                        
-                        return (
-                            <Card key={m.id} className="border-l-4 border-l-blue-500">
-                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                    <div>
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <Badge color="blue">
-                                                {m.target_audience === 'all' ? 'للجميع' : m.target_audience === 'trainers' ? 'للمسئولين' : 'مجموعة خاصة'}
-                                            </Badge>
-                                            <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                                                <Calendar size={12} /> {new Date(m.created_at).toLocaleDateString('ar-EG')}
-                                            </span>
-                                        </div>
-                                        <h4 className="font-bold text-lg text-navy dark:text-white">{m.topic}</h4>
-                                        <a href={m.link} target="_blank" rel="noreferrer" className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 mt-1">
-                                            <LinkIcon size={14} /> {m.link}
-                                        </a>
-                                    </div>
-                                    <div className="flex gap-2">
-                                         <Button 
-                                            variant="secondary" 
-                                            onClick={() => setExpandedMeetingId(isExpanded ? null : m.id)}
-                                            className="text-sm"
-                                        >
-                                            <MessageCircle size={16} /> 
-                                            إرسال عبر واتساب ({recipients.length})
-                                        </Button>
-                                    </div>
-                                </div>
-
-                                {isExpanded && (
-                                    <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700 animate-fadeIn">
-                                        <h5 className="font-bold text-sm text-gray-700 dark:text-gray-300 mb-3">اختر مستخدم لإرسال الرابط له:</h5>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-60 overflow-y-auto pr-1">
-                                            {recipients.map(u => (
-                                                <div key={u.id} className="flex items-center justify-between p-2 rounded border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-                                                    <div className="flex items-center gap-2 overflow-hidden">
-                                                        <div className="bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 p-1.5 rounded-full">
-                                                            <UserIcon size={14} />
-                                                        </div>
-                                                        <div className="truncate">
-                                                            <p className="text-sm font-bold text-gray-800 dark:text-gray-200 truncate">{u.name}</p>
-                                                            <p className="text-[10px] text-gray-500">{u.phone}</p>
-                                                        </div>
-                                                    </div>
-                                                    <button 
-                                                        onClick={() => sendWhatsapp(u.phone || '', u.name, m.topic, m.link)}
-                                                        className="text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 p-1.5 rounded-lg transition-colors"
-                                                        title="إرسال عبر واتساب"
-                                                    >
-                                                        <ExternalLink size={16} />
-                                                    </button>
-                                                </div>
-                                            ))}
-                                            {recipients.length === 0 && (
-                                                <p className="text-sm text-gray-400 col-span-full text-center py-2">لا توجد أرقام هواتف مسجلة لهذه الفئة.</p>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-                            </Card>
-                        );
-                    })}
-                </div>
-            )}
-        </div>
-      )}
-
       {activeTab === 5 && (
         <div className="grid lg:grid-cols-2 gap-6">
             <div className="space-y-6">
@@ -935,7 +850,7 @@ export default function AdminDashboard() {
                          <Button onClick={handleUpdateAnnouncement} variant="primary" className="flex-1">
                             <Megaphone size={16} /> نشر التنبيه
                         </Button>
-                         <Button onClick={() => { setAnnouncementText(''); db.setAnnouncement(''); window.location.reload(); }} variant="secondary">
+                         <Button onClick={() => { setAnnouncementText(''); db.setAnnouncement(''); if(!isCloud) window.location.reload(); }} variant="secondary">
                             مسح
                         </Button>
                     </div>

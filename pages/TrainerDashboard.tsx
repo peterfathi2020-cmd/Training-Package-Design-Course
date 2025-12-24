@@ -25,6 +25,7 @@ export default function TrainerDashboard({ user }: { user: User }) {
   const [uploadTraineeId, setUploadTraineeId] = useState<string>('');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadDesc, setUploadDesc] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
 
   // Attendance State
   const [attDate, setAttDate] = useState(new Date().toISOString().split('T')[0]);
@@ -36,6 +37,11 @@ export default function TrainerDashboard({ user }: { user: User }) {
 
   useEffect(() => {
     refreshData();
+    // Subscribe to DB changes (e.g. if a trainee registers in another tab)
+    const unsubscribe = db.subscribe(() => {
+        refreshData();
+    });
+    return () => unsubscribe();
   }, [user.id]);
 
   // Specific effect for loading attendance when date changes
@@ -43,8 +49,6 @@ export default function TrainerDashboard({ user }: { user: User }) {
       const records = db.getAttendance(user.id, attDate);
       const map: Record<number, boolean> = {};
       
-      // If records exist for this date, use them. 
-      // If not, default to false (unchecked)
       if (trainees.length > 0) {
         trainees.forEach(t => {
             const record = records.find(r => r.trainee_id === t.id);
@@ -91,7 +95,7 @@ export default function TrainerDashboard({ user }: { user: User }) {
       setEditingFile(null);
       setScore('');
       setFeedback('');
-      refreshData();
+      // refresh handled by db subscription now, but we can call it manually for immediate feedback UI
   }
 
   const startGrading = (file: FileRecord) => {
@@ -115,33 +119,45 @@ export default function TrainerDashboard({ user }: { user: User }) {
       setRDesc('');
       setRLink('');
       setRType('pdf');
-      refreshData();
   }
 
   const handleDeleteResource = (id: number) => {
       if (window.confirm('هل أنت متأكد من حذف هذا المصدر؟')) {
           db.deleteResource(id);
-          refreshData();
       }
   }
 
-  const handleUploadForTrainee = (e: React.FormEvent) => {
+  const handleUploadForTrainee = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!uploadTraineeId || !uploadFile) {
           alert('يرجى اختيار المتدرب والملف');
           return;
       }
-      db.addFile(Number(uploadTraineeId), uploadFile.name, uploadDesc || 'ملف من مسئول المجموعة');
-      alert('تم رفع الملف للمتدرب بنجاح');
-      setUploadFile(null);
-      setUploadDesc('');
-      setUploadTraineeId('');
-      refreshData();
+      setIsUploading(true);
+      try {
+        let fileUrl = undefined;
+        if (db.isCloudConnected) {
+            fileUrl = await db.uploadFileToCloud(uploadFile, 'trainer_uploads');
+        }
+
+        await db.addFile(Number(uploadTraineeId), uploadFile.name, uploadDesc || 'ملف من مسئول المجموعة', fileUrl);
+        alert('تم رفع الملف للمتدرب بنجاح');
+        setUploadFile(null);
+        setUploadDesc('');
+        setUploadTraineeId('');
+      } catch (error: any) {
+        alert("خطأ في الرفع: " + error.message);
+      } finally {
+        setIsUploading(false);
+      }
   }
 
   const handleDownloadFile = (file: FileRecord) => {
-      // Simulate file download
-      alert(`جاري تحميل الملف: ${file.filename}\n(في البيئة الحقيقية سيتم تحميل الملف من السحابة)`);
+      if (file.file_url) {
+          window.open(file.file_url, '_blank');
+      } else {
+          alert(`هذا ملف محلي تجريبي فقط: ${file.filename}`);
+      }
   };
 
   const handleAttendanceSubmit = (e: React.FormEvent) => {
@@ -246,8 +262,8 @@ export default function TrainerDashboard({ user }: { user: User }) {
                     onChange={(e) => setUploadDesc(e.target.value)} 
                     placeholder="مثال: الواجب المصحح..."
                     />
-                    <Button type="submit" className="w-full text-sm" disabled={!uploadFile || !uploadTraineeId}>
-                        <Send size={14} /> رفع
+                    <Button type="submit" className="w-full text-sm" disabled={!uploadFile || !uploadTraineeId || isUploading} isLoading={isUploading}>
+                        <Send size={14} /> {isUploading ? 'جاري الرفع...' : 'رفع'}
                     </Button>
                 </form>
            </Card>

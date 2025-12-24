@@ -1,4 +1,7 @@
-import { User, FileRecord, Meeting, UserRole, Resource, AttendanceRecord, LoginLog } from '../types';
+import { User, FileRecord, Meeting, UserRole, Resource, AttendanceRecord, LoginLog, FirebaseConfig } from '../types';
+import { initializeApp, FirebaseApp } from 'firebase/app';
+import { getFirestore, Firestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc, query, where, getDocs } from 'firebase/firestore';
+import { getStorage, FirebaseStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const STORAGE_KEYS = {
   USERS: 'bd_users',
@@ -8,6 +11,7 @@ const STORAGE_KEYS = {
   ATTENDANCE: 'bd_attendance',
   ANNOUNCEMENT: 'bd_announcement',
   LOGIN_LOGS: 'bd_login_logs',
+  FIREBASE_CONFIG: 'bd_firebase_config'
 };
 
 // Seed Data
@@ -20,50 +24,6 @@ const DEFAULT_ADMIN: User = {
   phone: '0000000000',
 };
 
-// Pre-defined Trainers List
-const DEFAULT_TRAINERS: User[] = [
-    {
-        id: 101,
-        name: 'يارا شاكر',
-        email: 'yaraaa.shaker@gmail.com',
-        phone: '01096806661',
-        role: 'trainer',
-        password: '01096806661'
-    },
-    {
-        id: 102,
-        name: 'أسامة سويفي',
-        email: 'Usamaswify@gmail.com',
-        phone: '01012850998',
-        role: 'trainer',
-        password: '01012850998'
-    },
-    {
-        id: 103,
-        name: 'هيام حسيني',
-        email: 'hayamhussiny2013@gmail.com',
-        phone: '01220784649',
-        role: 'trainer',
-        password: '01220784649'
-    },
-    {
-        id: 104,
-        name: 'عبير السيد',
-        email: 'abeerelsayed881@gmail.com',
-        phone: '01000165790',
-        role: 'trainer',
-        password: '01000165790'
-    },
-    {
-        id: 105,
-        name: 'مشيرة الكردي',
-        email: 'moshera.elkordy@gmail.com',
-        phone: '01284535418',
-        role: 'trainer',
-        password: '01284535418'
-    }
-];
-
 class MockDatabase {
   // In-Memory Cache
   private _users: User[] = [];
@@ -74,17 +34,127 @@ class MockDatabase {
   private _loginLogs: LoginLog[] = [];
   private _announcement: string = '';
 
-  // Performance Caches (Memoization)
-  private _filesViewCache: FileRecord[] | null = null;
-  private _trainersCache: User[] | null = null;
+  // Cloud State
+  private firebaseApp: FirebaseApp | null = null;
+  private firestore: Firestore | null = null;
+  private storage: FirebaseStorage | null = null;
+  public isCloudConnected: boolean = false;
+
+  // Listeners
+  private _listeners: (() => void)[] = [];
 
   constructor() {
     this.init();
   }
 
-  private init() {
-    // 1. Load raw data from LocalStorage into Memory
-    try {
+  // Subscribe to changes (UI Updates)
+  subscribe(callback: () => void) {
+      this._listeners.push(callback);
+      return () => {
+          this._listeners = this._listeners.filter(cb => cb !== callback);
+      };
+  }
+
+  private notifyListeners() {
+      this._listeners.forEach(cb => cb());
+  }
+
+  private async init() {
+    // 1. Check for Firebase Config
+    const savedConfig = localStorage.getItem(STORAGE_KEYS.FIREBASE_CONFIG);
+    if (savedConfig) {
+        try {
+            const config = JSON.parse(savedConfig);
+            this.firebaseApp = initializeApp(config);
+            this.firestore = getFirestore(this.firebaseApp);
+            this.storage = getStorage(this.firebaseApp);
+            this.isCloudConnected = true;
+            this.setupRealtimeListeners();
+            console.log("🔥 Connected to Firebase Cloud Database & Storage");
+            return;
+        } catch (e) {
+            console.error("Firebase Init Error:", e);
+            this.isCloudConnected = false;
+        }
+    }
+
+    // 2. Fallback to LocalStorage if no cloud
+    this.loadFromLocalStorage();
+    this.ensureAdminExists();
+  }
+
+  // --- Cloud Setup ---
+  
+  public saveCloudConfig(config: FirebaseConfig) {
+      localStorage.setItem(STORAGE_KEYS.FIREBASE_CONFIG, JSON.stringify(config));
+      window.location.reload(); // Reload to initialize firebase
+  }
+
+  public disconnectCloud() {
+      localStorage.removeItem(STORAGE_KEYS.FIREBASE_CONFIG);
+      window.location.reload();
+  }
+
+  // --- File Upload Logic ---
+  public async uploadFileToCloud(file: File, folder: string = 'files'): Promise<string> {
+      if (!this.isCloudConnected || !this.storage) {
+          throw new Error("Cloud not connected");
+      }
+      
+      const storageRef = ref(this.storage, `${folder}/${Date.now()}_${file.name}`);
+      const snapshot = await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      return downloadURL;
+  }
+
+  private setupRealtimeListeners() {
+      if (!this.firestore) return;
+
+      // Users
+      onSnapshot(collection(this.firestore, 'users'), (snapshot) => {
+          this._users = snapshot.docs.map(doc => ({ ...doc.data(), id: Number(doc.id) } as User));
+          this.ensureAdminExists(); 
+          this.notifyListeners();
+      });
+
+      // Files
+      onSnapshot(collection(this.firestore, 'files'), (snapshot) => {
+          this._files = snapshot.docs.map(doc => ({ ...doc.data(), id: Number(doc.id) } as FileRecord));
+          this.notifyListeners();
+      });
+
+      // Resources
+      onSnapshot(collection(this.firestore, 'resources'), (snapshot) => {
+          this._resources = snapshot.docs.map(doc => ({ ...doc.data(), id: Number(doc.id) } as Resource));
+          this.notifyListeners();
+      });
+
+       // Meetings
+       onSnapshot(collection(this.firestore, 'meetings'), (snapshot) => {
+        this._meetings = snapshot.docs.map(doc => ({ ...doc.data(), id: Number(doc.id) } as Meeting));
+        this.notifyListeners();
+       });
+
+       // Announcement
+       onSnapshot(collection(this.firestore, 'settings'), (snapshot) => {
+           const data = snapshot.docs.find(d => d.id === 'announcement')?.data();
+           if (data) {
+               this._announcement = data.text || '';
+               this.notifyListeners();
+           }
+       });
+       
+       // Attendance
+       onSnapshot(collection(this.firestore, 'attendance'), (snapshot) => {
+           this._attendance = snapshot.docs.map(doc => ({ ...doc.data(), id: Number(doc.id) } as AttendanceRecord));
+           this.notifyListeners();
+       });
+  }
+
+  // --- Local Storage Fallback ---
+
+  private loadFromLocalStorage() {
+      try {
         this._users = JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || '[]');
         this._files = JSON.parse(localStorage.getItem(STORAGE_KEYS.FILES) || '[]');
         this._meetings = JSON.parse(localStorage.getItem(STORAGE_KEYS.MEETINGS) || '[]');
@@ -93,67 +163,25 @@ class MockDatabase {
         this._loginLogs = JSON.parse(localStorage.getItem(STORAGE_KEYS.LOGIN_LOGS) || '[]');
         this._announcement = localStorage.getItem(STORAGE_KEYS.ANNOUNCEMENT) || '';
     } catch (e) {
-        console.error("Error loading DB", e);
-        // Fallback to empty if corruption
         this._users = [];
-    }
-
-    // 2. Seed Data Logic (Runs only if data is missing or specific users missing)
-    let hasChanges = false;
-
-    // Ensure Admin Exists or Update Admin Credentials
-    const adminIndex = this._users.findIndex(u => u.role === 'admin' && u.id === 1);
-    if (adminIndex === -1) {
-        this._users.push(DEFAULT_ADMIN);
-        hasChanges = true;
-    } else {
-        // Force update admin credentials if they don't match (for the request to change password)
-        if (this._users[adminIndex].email !== DEFAULT_ADMIN.email || 
-            this._users[adminIndex].password !== DEFAULT_ADMIN.password) {
-            this._users[adminIndex].email = DEFAULT_ADMIN.email;
-            this._users[adminIndex].password = DEFAULT_ADMIN.password;
-            hasChanges = true;
-        }
-    }
-
-    // Ensure Default Trainers Exist and Update Passwords if needed
-    DEFAULT_TRAINERS.forEach(dt => {
-        const index = this._users.findIndex(u => u.email.toLowerCase() === dt.email.toLowerCase());
-        if (index === -1) {
-            // New trainer
-            this._users.push(dt);
-            hasChanges = true;
-        } else {
-            // Existing trainer - Update password to match phone if currently different
-            // This ensures existing users get the new password policy applied
-            if (this._users[index].password !== dt.password) {
-                this._users[index].password = dt.password;
-                this._users[index].phone = dt.phone; // Ensure phone matches too
-                hasChanges = true;
-            }
-        }
-    });
-
-    // 3. Persist seed data if added
-    if (hasChanges) {
-        this.saveToStorage(STORAGE_KEYS.USERS, this._users);
-        this.clearCaches();
     }
   }
 
-  // Helper to sync memory to disk
   private saveToStorage(key: string, data: any) {
+      if (this.isCloudConnected) return; // Don't overwrite local if using cloud
       if (typeof data === 'string') {
           localStorage.setItem(key, data);
       } else {
           localStorage.setItem(key, JSON.stringify(data));
       }
+      this.notifyListeners();
   }
 
-  // Helper to invalidate memoized data
-  private clearCaches() {
-      this._filesViewCache = null;
-      this._trainersCache = null;
+  private ensureAdminExists() {
+      const adminIndex = this._users.findIndex(u => u.role === 'admin' && u.id === 1);
+      if (adminIndex === -1) {
+          this._users.push(DEFAULT_ADMIN);
+      }
   }
 
   // --- Users ---
@@ -162,78 +190,84 @@ class MockDatabase {
     return this._users;
   }
 
-  saveUser(user: Omit<User, 'id'>): User {
-    // Check email uniqueness from memory
+  async saveUser(user: Omit<User, 'id'>): Promise<User> {
     if (this._users.find((u) => u.email === user.email)) {
       throw new Error('البريد الإلكتروني مسجل مسبقاً');
     }
-    const newUser = { ...user, id: Date.now() };
-    this._users.push(newUser);
-    this.saveToStorage(STORAGE_KEYS.USERS, this._users);
-    this.clearCaches(); // Invalidate caches
+    const newId = Date.now();
+    const newUser = { ...user, id: newId };
+
+    if (this.isCloudConnected && this.firestore) {
+        await setDoc(doc(this.firestore, 'users', String(newId)), newUser);
+    } else {
+        this._users.push(newUser);
+        this.saveToStorage(STORAGE_KEYS.USERS, this._users);
+    }
     return newUser;
   }
 
-  updatePassword(email: string, newPass: string) {
-    const index = this._users.findIndex((u) => u.email === email);
-    if (index !== -1) {
-      this._users[index].password = newPass;
-      this.saveToStorage(STORAGE_KEYS.USERS, this._users);
-      this.clearCaches(); // Invalidate caches
-      return true;
+  async updatePassword(email: string, newPass: string) {
+    const user = this._users.find((u) => u.email === email);
+    if (user) {
+        if (this.isCloudConnected && this.firestore) {
+            await updateDoc(doc(this.firestore, 'users', String(user.id)), { password: newPass });
+        } else {
+            user.password = newPass;
+            this.saveToStorage(STORAGE_KEYS.USERS, this._users);
+        }
+        return true;
     }
     return false;
   }
   
-  updateUserProfile(id: number, updates: { phone?: string; password?: string }) {
-      const index = this._users.findIndex((u) => u.id === id);
-      if (index !== -1) {
-          if (updates.phone) this._users[index].phone = updates.phone;
-          if (updates.password) this._users[index].password = updates.password;
-          this.saveToStorage(STORAGE_KEYS.USERS, this._users);
-          this.clearCaches(); // Invalidate caches
-          return this._users[index];
-      }
-      return null;
-  }
-
-  // Generic Update User (Admin use)
-  updateUser(id: number, data: Partial<User>) {
-      const index = this._users.findIndex((u) => u.id === id);
-      if (index !== -1) {
-          this._users[index] = { ...this._users[index], ...data };
-          this.saveToStorage(STORAGE_KEYS.USERS, this._users);
-          this.clearCaches(); // Invalidate caches
+  async updateUserProfile(id: number, updates: { phone?: string; password?: string }) {
+      const user = this._users.find((u) => u.id === id);
+      if (user) {
+          if (this.isCloudConnected && this.firestore) {
+             await updateDoc(doc(this.firestore, 'users', String(id)), updates);
+          } else {
+             if (updates.phone) user.phone = updates.phone;
+             if (updates.password) user.password = updates.password;
+             this.saveToStorage(STORAGE_KEYS.USERS, this._users);
+          }
           return true;
       }
       return false;
   }
 
-  // Delete User
-  deleteUser(id: number) {
-      // Prevent deleting the main admin
-      const user = this.getUserById(id);
-      if (user?.role === 'admin' && user.id === 1) {
-          throw new Error("لا يمكن حذف المدير العام الرئيسي");
+  async updateUser(id: number, data: Partial<User>) {
+      const user = this._users.find((u) => u.id === id);
+      if (user) {
+          if (this.isCloudConnected && this.firestore) {
+             await updateDoc(doc(this.firestore, 'users', String(id)), data);
+          } else {
+             const index = this._users.findIndex(u => u.id === id);
+             this._users[index] = { ...this._users[index], ...data };
+             this.saveToStorage(STORAGE_KEYS.USERS, this._users);
+          }
+          return true;
       }
+      return false;
+  }
 
-      this._users = this._users.filter(u => u.id !== id);
-      this.saveToStorage(STORAGE_KEYS.USERS, this._users);
-      this.clearCaches(); // Invalidate caches to remove deleted user from files view
+  async deleteUser(id: number) {
+      if (id === 1) throw new Error("لا يمكن حذف المدير العام الرئيسي");
+      
+      if (this.isCloudConnected && this.firestore) {
+          await deleteDoc(doc(this.firestore, 'users', String(id)));
+      } else {
+          this._users = this._users.filter(u => u.id !== id);
+          this.saveToStorage(STORAGE_KEYS.USERS, this._users);
+      }
   }
 
   login(email: string, pass: string): User | null {
+    // For login, we rely on the synced _users array
     const user = this._users.find((u) => u.email.toLowerCase() === email.toLowerCase() && u.password === pass) || null;
-    
-    if (user) {
-        this.logLogin(user);
-    }
-    
+    if (user) this.logLogin(user);
     return user;
   }
 
-  // --- Login Analytics ---
-  
   private logLogin(user: User) {
       const newLog: LoginLog = {
           id: Date.now(),
@@ -242,11 +276,8 @@ class MockDatabase {
           role: user.role,
           timestamp: new Date().toLocaleString('ar-EG')
       };
-      
-      // Update memory first
       this._loginLogs = [newLog, ...this._loginLogs].slice(0, 500);
-      // Then persist
-      this.saveToStorage(STORAGE_KEYS.LOGIN_LOGS, this._loginLogs);
+      this.saveToStorage(STORAGE_KEYS.LOGIN_LOGS, this._loginLogs); // Logs kept local for now or extended to firestore later
   }
 
   getLoginLogs(): LoginLog[] {
@@ -254,11 +285,7 @@ class MockDatabase {
   }
 
   getTrainers(): User[] {
-    // Memoized access
-    if (this._trainersCache) return this._trainersCache;
-
-    this._trainersCache = this._users.filter((u) => u.role === 'trainer');
-    return this._trainersCache;
+    return this._users.filter((u) => u.role === 'trainer');
   }
 
   getTraineesByTrainer(trainerId: number): User[] {
@@ -269,19 +296,13 @@ class MockDatabase {
       return this._users.find(u => u.id === id);
   }
 
-  // --- Files (Assignments) ---
+  // --- Files ---
 
-  // Highly Optimized: Uses memoization and O(1) Map lookup
   getFiles(): FileRecord[] {
-    // Return cached result if valid
-    if (this._filesViewCache) return this._filesViewCache;
-
-    // 1. Create a Map for O(1) user lookup. 
     const userMap = new Map<number, User>();
     this._users.forEach(u => userMap.set(u.id, u));
 
-    // 2. Map files to include user details
-    this._filesViewCache = this._files.map((f: FileRecord) => {
+    return this._files.map((f: FileRecord) => {
       const uploader = userMap.get(f.user_id);
       const trainer = uploader?.assigned_trainer_id 
         ? userMap.get(uploader.assigned_trainer_id) 
@@ -293,56 +314,73 @@ class MockDatabase {
         trainer_name: trainer?.name || 'غير معين'
       };
     });
-
-    return this._filesViewCache;
   }
 
-  addFile(userId: number, filename: string, description: string) {
+  async addFile(userId: number, filename: string, description: string, fileUrl?: string) {
+    const newId = Date.now();
     const newFile: FileRecord = {
-      id: Date.now(),
+      id: newId,
       user_id: userId,
       filename,
       description,
+      file_url: fileUrl,
       upload_date: new Date().toLocaleString('ar-EG'),
       status: 'pending'
     };
-    this._files.push(newFile);
-    this.saveToStorage(STORAGE_KEYS.FILES, this._files);
-    this._filesViewCache = null; // Invalidate files cache
+
+    if (this.isCloudConnected && this.firestore) {
+        await setDoc(doc(this.firestore, 'files', String(newId)), newFile);
+    } else {
+        this._files.push(newFile);
+        this.saveToStorage(STORAGE_KEYS.FILES, this._files);
+    }
   }
 
-  gradeFile(fileId: number, score: number, feedback: string) {
-      const index = this._files.findIndex((f) => f.id === fileId);
-      if (index !== -1) {
-          this._files[index].score = score;
-          this._files[index].feedback = feedback;
-          this._files[index].status = 'graded';
-          this.saveToStorage(STORAGE_KEYS.FILES, this._files);
-          this._filesViewCache = null; // Invalidate files cache
-          return true;
+  async gradeFile(fileId: number, score: number, feedback: string) {
+      if (this.isCloudConnected && this.firestore) {
+          await updateDoc(doc(this.firestore, 'files', String(fileId)), {
+              score, feedback, status: 'graded'
+          });
+      } else {
+          const index = this._files.findIndex((f) => f.id === fileId);
+          if (index !== -1) {
+              this._files[index].score = score;
+              this._files[index].feedback = feedback;
+              this._files[index].status = 'graded';
+              this.saveToStorage(STORAGE_KEYS.FILES, this._files);
+          }
       }
-      return false;
   }
 
-  // --- Resources (Library) ---
+  // --- Resources ---
 
   getResources(): Resource[] {
       return this._resources;
   }
 
-  addResource(resource: Omit<Resource, 'id' | 'created_at'>) {
+  async addResource(resource: Omit<Resource, 'id' | 'created_at'>) {
+      const newId = Date.now();
       const newResource = {
           ...resource,
-          id: Date.now(),
+          id: newId,
           created_at: new Date().toLocaleString('ar-EG')
       };
-      this._resources.push(newResource);
-      this.saveToStorage(STORAGE_KEYS.RESOURCES, this._resources);
+
+      if (this.isCloudConnected && this.firestore) {
+          await setDoc(doc(this.firestore, 'resources', String(newId)), newResource);
+      } else {
+          this._resources.push(newResource);
+          this.saveToStorage(STORAGE_KEYS.RESOURCES, this._resources);
+      }
   }
 
-  deleteResource(id: number) {
-      this._resources = this._resources.filter(r => r.id !== id);
-      this.saveToStorage(STORAGE_KEYS.RESOURCES, this._resources);
+  async deleteResource(id: number) {
+      if (this.isCloudConnected && this.firestore) {
+          await deleteDoc(doc(this.firestore, 'resources', String(id)));
+      } else {
+          this._resources = this._resources.filter(r => r.id !== id);
+          this.saveToStorage(STORAGE_KEYS.RESOURCES, this._resources);
+      }
   }
 
   // --- Meetings ---
@@ -351,33 +389,46 @@ class MockDatabase {
     return this._meetings;
   }
 
-  addMeeting(meeting: Omit<Meeting, 'id' | 'created_at'>) {
+  async addMeeting(meeting: Omit<Meeting, 'id' | 'created_at'>) {
+    const newId = Date.now();
     const newMeeting = {
       ...meeting,
-      id: Date.now(),
+      id: newId,
       created_at: new Date().toISOString(),
     };
-    this._meetings.push(newMeeting);
-    this.saveToStorage(STORAGE_KEYS.MEETINGS, this._meetings);
+
+    if (this.isCloudConnected && this.firestore) {
+        await setDoc(doc(this.firestore, 'meetings', String(newId)), newMeeting);
+    } else {
+        this._meetings.push(newMeeting);
+        this.saveToStorage(STORAGE_KEYS.MEETINGS, this._meetings);
+    }
   }
   
   // --- Attendance ---
 
   getAttendance(trainerId: number, date: string): AttendanceRecord[] {
-      // Memory filter is fast
       return this._attendance.filter((r) => r.trainer_id === trainerId && r.date === date);
   }
 
-  saveAttendance(records: Omit<AttendanceRecord, 'id'>[]) {
-      // Key: trainee_id + date (to identify what to overwrite)
-      const keysToRemove = new Set(records.map(r => `${r.trainee_id}_${r.date}`));
-      
-      // Filter memory
-      const kept = this._attendance.filter((r) => !keysToRemove.has(`${r.trainee_id}_${r.date}`));
-      const newRecords = records.map(r => ({ ...r, id: Date.now() + Math.random() }));
-      
-      this._attendance = [...kept, ...newRecords];
-      this.saveToStorage(STORAGE_KEYS.ATTENDANCE, this._attendance);
+  async saveAttendance(records: Omit<AttendanceRecord, 'id'>[]) {
+    // In local mode, we replace. In Cloud mode, we should ideally upsert.
+    // Simplifying for hybrid: add new records, we won't delete old ones for same day in cloud for now to avoid complexity
+    
+    if (this.isCloudConnected && this.firestore) {
+        // Delete existing for this trainer/date to avoid dupes (naive approach)
+        // A better approach would be batched writes, but let's just write new ones
+        records.forEach(async r => {
+            const id = Number(`${r.trainee_id}${r.date.replace(/-/g, '')}`);
+            await setDoc(doc(this.firestore!, 'attendance', String(id)), { ...r, id });
+        });
+    } else {
+        const keysToRemove = new Set(records.map(r => `${r.trainee_id}_${r.date}`));
+        const kept = this._attendance.filter((r) => !keysToRemove.has(`${r.trainee_id}_${r.date}`));
+        const newRecords = records.map(r => ({ ...r, id: Date.now() + Math.random() }));
+        this._attendance = [...kept, ...newRecords];
+        this.saveToStorage(STORAGE_KEYS.ATTENDANCE, this._attendance);
+    }
   }
 
   // --- Announcement ---
@@ -386,15 +437,18 @@ class MockDatabase {
       return this._announcement;
   }
 
-  setAnnouncement(text: string) {
-      this._announcement = text;
-      this.saveToStorage(STORAGE_KEYS.ANNOUNCEMENT, text);
+  async setAnnouncement(text: string) {
+      if (this.isCloudConnected && this.firestore) {
+          await setDoc(doc(this.firestore, 'settings', 'announcement'), { text });
+      } else {
+          this._announcement = text;
+          this.saveToStorage(STORAGE_KEYS.ANNOUNCEMENT, text);
+      }
   }
 
-  // --- Backup & Export ---
+  // --- Backup & Export (Kept for local utility) ---
 
   exportDB() {
-      // Use in-memory data for export
       const data = {
           users: this._users,
           files: this._files,
@@ -414,12 +468,10 @@ class MockDatabase {
       URL.revokeObjectURL(url);
   }
 
-  // Generate CSV for Excel
   exportUsersToCSV() {
       const userMap = new Map<number, User>();
       this._users.forEach(u => userMap.set(u.id, u));
 
-      // CSV Header
       let csvContent = "المعرف,الاسم,البريد الإلكتروني,كلمة المرور,الدور,الهاتف,اسم مسئول المجموعة\n";
       
       this._users.forEach(u => {
@@ -430,10 +482,8 @@ class MockDatabase {
           }
 
           const roleAr = u.role === 'admin' ? 'مدير' : u.role === 'trainer' ? 'مسئول مجموعة' : 'متدرب';
-          
-          // Escape quotes within content
           const cleanName = u.name.replace(/"/g, '""');
-          const cleanPhone = u.phone ? `'${u.phone}` : ''; // Add ' to force string in Excel for phones
+          const cleanPhone = u.phone ? `'${u.phone}` : ''; 
 
           const row = [
               u.id,
@@ -448,7 +498,6 @@ class MockDatabase {
           csvContent += row + "\n";
       });
 
-      // Add BOM for correct Arabic rendering in Excel
       const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -461,13 +510,16 @@ class MockDatabase {
   importDB(jsonString: string): boolean {
       try {
           const data = JSON.parse(jsonString);
-          
-          // Basic Validation
           if (!data.users || !Array.isArray(data.users)) {
               throw new Error("Invalid Backup Format: Missing users");
           }
 
-          // Update Memory
+          // If cloud is connected, we might want to prevent overwrite or warn user
+          if (this.isCloudConnected) {
+              alert("تحذير: أنت متصل بالسحابة. لا يمكن استيراد بيانات محلية فوق قاعدة بيانات سحابية مباشرة.");
+              return false;
+          }
+
           this._users = data.users;
           this._files = data.files || [];
           this._meetings = data.meetings || [];
@@ -475,7 +527,6 @@ class MockDatabase {
           this._attendance = data.attendance || [];
           this._loginLogs = data.loginLogs || [];
 
-          // Persist all
           this.saveToStorage(STORAGE_KEYS.USERS, this._users);
           this.saveToStorage(STORAGE_KEYS.FILES, this._files);
           this.saveToStorage(STORAGE_KEYS.MEETINGS, this._meetings);
@@ -483,9 +534,6 @@ class MockDatabase {
           this.saveToStorage(STORAGE_KEYS.ATTENDANCE, this._attendance);
           this.saveToStorage(STORAGE_KEYS.LOGIN_LOGS, this._loginLogs);
           
-          // Clear caches to force rebuild with new data
-          this.clearCaches();
-
           return true;
       } catch (error) {
           console.error("Import Failed:", error);

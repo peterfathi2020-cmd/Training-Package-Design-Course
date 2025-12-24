@@ -13,6 +13,7 @@ export default function TraineeDashboard({ user }: { user: User }) {
   // Upload Form
   const [desc, setDesc] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Notifications
   const [notifications, setNotifications] = useState<FileRecord[]>([]);
@@ -22,6 +23,11 @@ export default function TraineeDashboard({ user }: { user: User }) {
         setTrainer(db.getUserById(user.assigned_trainer_id));
     }
     refreshData();
+    // Subscribe to DB changes (e.g. grading updates from trainer)
+    const unsubscribe = db.subscribe(() => {
+        refreshData();
+    });
+    return () => unsubscribe();
   }, [user]);
 
   const refreshData = () => {
@@ -64,15 +70,26 @@ export default function TraineeDashboard({ user }: { user: User }) {
     setResources(relevantResources);
   };
 
-  const handleUpload = (e: React.FormEvent) => {
+  const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedFile) return;
 
-    db.addFile(user.id, selectedFile.name, desc);
-    alert('تم رفع الملف بنجاح وإرساله لمسئول المجموعة');
-    setDesc('');
-    setSelectedFile(null);
-    refreshData();
+    setIsUploading(true);
+    try {
+        let fileUrl = undefined;
+        if (db.isCloudConnected) {
+            fileUrl = await db.uploadFileToCloud(selectedFile, 'trainee_uploads');
+        }
+
+        await db.addFile(user.id, selectedFile.name, desc, fileUrl);
+        alert(`تم إرسال الملف "${selectedFile.name}" بنجاح إلى مسئول المجموعة ${trainer ? trainer.name : ''}`);
+        setDesc('');
+        setSelectedFile(null);
+    } catch (error: any) {
+        alert("فشل رفع الملف: " + error.message);
+    } finally {
+        setIsUploading(false);
+    }
   };
 
   const dismissNotification = (fileId: number) => {
@@ -139,7 +156,7 @@ export default function TraineeDashboard({ user }: { user: User }) {
                    </div>
                    {trainer.phone && (
                        <a 
-                        href={`https://wa.me/${trainer.phone}`}
+                        href={`https://wa.me/2${trainer.phone.replace(/^0+/, '')}`}
                         target="_blank"
                         rel="noreferrer"
                         className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
@@ -193,7 +210,7 @@ export default function TraineeDashboard({ user }: { user: User }) {
            <div className="lg:col-span-1 space-y-6">
                <Card title="إرسال واجب / ملف">
                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 bg-gray-50 dark:bg-gray-700/50 p-2 rounded">
-                       الملفات التي تقوم برفعها هنا تظهر فقط لمسئول مجموعتك ({trainer ? trainer.name : '...'}) وللإدارة.
+                       الملفات التي تقوم برفعها هنا تظهر فوراً لمسئول مجموعتك ({trainer ? trainer.name : '...'}) وللإدارة.
                    </p>
                    <form onSubmit={handleUpload} className="space-y-4">
                        <div className="border-2 border-dashed border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-900/20 rounded-lg p-6 text-center hover:bg-blue-50 dark:hover:bg-blue-900/30 transition cursor-pointer relative group">
@@ -217,9 +234,9 @@ export default function TraineeDashboard({ user }: { user: User }) {
                         placeholder="مثال: الواجب الأول - تصميم حقيبة يد"
                         required
                        />
-                       <Button type="submit" className="w-full" disabled={!selectedFile}>
+                       <Button type="submit" className="w-full" disabled={!selectedFile || isUploading} isLoading={isUploading}>
                            <Send size={16} />
-                           رفع وإرسال
+                           {isUploading ? 'جاري الرفع...' : 'رفع وإرسال'}
                        </Button>
                    </form>
                </Card>

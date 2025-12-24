@@ -14,6 +14,7 @@ export interface FileRecord {
   id: number;
   user_id: number;
   filename: string;
+  file_url?: string; // Added for cloud links
   upload_date: string;
   description: string;
   user_name?: string; // Joined field
@@ -62,4 +63,13 @@ export interface LoginLog {
 export interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
+}
+
+export interface FirebaseConfig {
+  apiKey: string;
+  authDomain: string;
+  projectId: string;
+  storageBucket: string;
+  messagingSenderId: string;
+  appId: string;
 }
