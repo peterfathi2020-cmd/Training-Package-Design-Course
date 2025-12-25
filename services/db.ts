@@ -60,27 +60,53 @@ class MockDatabase {
   }
 
   private async init() {
-    // 1. Check for Firebase Config
+    // 1. Try to load from firebase-config.json automatically
+    try {
+        const response = await fetch('/firebase-config.json');
+        if (response.ok) {
+            const config = await response.json();
+            console.log("Found firebase-config.json, attempting connection...");
+            this.initializeFirebase(config);
+            return;
+        }
+    } catch (e) {
+        // File not found or fetch error, proceed to storage
+        console.log("No local firebase-config.json found.");
+    }
+
+    // 2. Check for Firebase Config in LocalStorage
     const savedConfig = localStorage.getItem(STORAGE_KEYS.FIREBASE_CONFIG);
     if (savedConfig) {
         try {
             const config = JSON.parse(savedConfig);
-            this.firebaseApp = initializeApp(config);
-            this.firestore = getFirestore(this.firebaseApp);
-            this.storage = getStorage(this.firebaseApp);
-            this.isCloudConnected = true;
-            this.setupRealtimeListeners();
-            console.log("🔥 Connected to Firebase Cloud Database & Storage");
+            this.initializeFirebase(config);
             return;
         } catch (e) {
-            console.error("Firebase Init Error:", e);
+            console.error("Firebase Init Error (Storage):", e);
             this.isCloudConnected = false;
         }
     }
 
-    // 2. Fallback to LocalStorage if no cloud
+    // 3. Fallback to LocalStorage if no cloud
     this.loadFromLocalStorage();
     this.ensureAdminExists();
+  }
+
+  private initializeFirebase(config: FirebaseConfig) {
+      try {
+          this.firebaseApp = initializeApp(config);
+          this.firestore = getFirestore(this.firebaseApp);
+          this.storage = getStorage(this.firebaseApp);
+          this.isCloudConnected = true;
+          this.setupRealtimeListeners();
+          console.log("🔥 Connected to Firebase Cloud Database & Storage");
+      } catch (e) {
+          console.error("Firebase Connection Error:", e);
+          this.isCloudConnected = false;
+          // Fallback to local
+          this.loadFromLocalStorage();
+          this.ensureAdminExists();
+      }
   }
 
   // --- Cloud Setup ---
