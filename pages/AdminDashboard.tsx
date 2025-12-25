@@ -234,11 +234,34 @@ export default function AdminDashboard() {
   
   const handleConnectCloud = () => {
       try {
-          const config = JSON.parse(fbConfigJson);
-          if(!config.apiKey || !config.projectId) throw new Error("بيانات غير مكتملة");
+          // Robust parsing for various copy-paste formats (JS object, JSON, with/without const/;)
+          let input = fbConfigJson.trim();
+          
+          // Remove variable declaration (const config = ...)
+          input = input.replace(/^(const|var|let)\s+\w+\s*=\s*/, '');
+          
+          // Remove trailing semicolon
+          input = input.replace(/;$/, '');
+          
+          // Ensure keys are quoted (fixes JavaScript object syntax: key: "value" -> "key": "value")
+          input = input.replace(/(\w+)\s*:/g, '"$1":');
+          
+          // Normalize quotes (single to double)
+          input = input.replace(/'/g, '"');
+          
+          // Remove trailing commas (which are invalid in JSON)
+          input = input.replace(/,\s*}/g, '}');
+          input = input.replace(/,\s*]/g, ']');
+
+          const config = JSON.parse(input);
+          
+          if(!config.apiKey || !config.projectId) throw new Error("بيانات غير مكتملة (apiKey أو projectId مفقود)");
+          
           db.saveCloudConfig(config);
+          setShowFbModal(false);
       } catch (e) {
-          alert("تنسيق JSON غير صحيح. تأكد من نسخ كائن الإعدادات بشكل صحيح من Firebase.");
+          console.error(e);
+          alert("تنسيق البيانات غير صحيح.\n\nنصيحة: انسخ فقط المحتوى الموجود بين القوسين { ... } من إعدادات Firebase.");
       }
   };
 
