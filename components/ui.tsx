@@ -130,10 +130,14 @@ interface CardProps {
   title?: string;
   className?: string;
   action?: React.ReactNode;
+  onClick?: () => void;
 }
 
-export const Card: React.FC<CardProps> = ({ children, title, className = '', action }) => (
-  <div className={`bg-white dark:bg-gray-800 rounded-2xl shadow-lg shadow-gray-200/50 dark:shadow-none border border-gray-100 dark:border-gray-700 p-6 transition-all hover:shadow-xl hover:shadow-gray-200/50 dark:hover:shadow-black/20 ${className}`}>
+export const Card: React.FC<CardProps> = ({ children, title, className = '', action, onClick }) => (
+  <div 
+    onClick={onClick}
+    className={`bg-white dark:bg-gray-800 rounded-2xl shadow-lg shadow-gray-200/50 dark:shadow-none border border-gray-100 dark:border-gray-700 p-6 transition-all hover:shadow-xl hover:shadow-gray-200/50 dark:hover:shadow-black/20 ${onClick ? 'cursor-pointer' : ''} ${className}`}
+  >
     {(title || action) && (
         <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100 dark:border-gray-700">
             {title && <h3 className="text-xl font-extrabold text-navy dark:text-white tracking-tight">{title}</h3>}

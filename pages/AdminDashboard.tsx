@@ -541,7 +541,7 @@ export default function AdminDashboard() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <Card className="text-center flex flex-col items-center justify-center p-6 transition-transform hover:-translate-y-1">
+                <Card onClick={() => setActiveTab(2)} className="text-center flex flex-col items-center justify-center p-6 transition-transform hover:-translate-y-1">
                     <div className="bg-blue-100 dark:bg-blue-900/30 p-4 rounded-full text-blue-600 dark:text-blue-400 mb-4 inline-flex shadow-sm">
                         <Users size={28} />
                     </div>
@@ -549,7 +549,7 @@ export default function AdminDashboard() {
                     <h2 className="text-4xl font-extrabold text-navy dark:text-blue-400">{traineesCount}</h2>
                     <span className="text-xs text-green-600 font-bold bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded-full mt-2 inline-block">نشط</span>
                 </Card>
-                <Card className="text-center flex flex-col items-center justify-center p-6 transition-transform hover:-translate-y-1">
+                <Card onClick={() => setActiveTab(1)} className="text-center flex flex-col items-center justify-center p-6 transition-transform hover:-translate-y-1">
                     <div className="bg-green-100 dark:bg-green-900/30 p-4 rounded-full text-green-600 dark:text-green-400 mb-4 inline-flex shadow-sm">
                         <Briefcase size={28} />
                     </div>
@@ -557,7 +557,7 @@ export default function AdminDashboard() {
                     <h2 className="text-4xl font-extrabold text-navy dark:text-green-400">{trainers.length}</h2>
                     <span className="text-xs text-blue-600 font-bold bg-blue-100 dark:bg-blue-900/30 px-2 py-0.5 rounded-full mt-2 inline-block">مشرف</span>
                 </Card>
-                <Card className="text-center flex flex-col items-center justify-center p-6 transition-transform hover:-translate-y-1">
+                <Card onClick={() => setActiveTab(2)} className="text-center flex flex-col items-center justify-center p-6 transition-transform hover:-translate-y-1">
                     <div className="bg-orange-100 dark:bg-orange-900/30 p-4 rounded-full text-orange-600 dark:text-orange-400 mb-4 inline-flex shadow-sm">
                         <FileText size={28} />
                     </div>
@@ -565,7 +565,7 @@ export default function AdminDashboard() {
                     <h2 className="text-4xl font-extrabold text-navy dark:text-orange-400">{allFiles.length}</h2>
                     <span className="text-xs text-orange-600 font-bold bg-orange-100 dark:bg-orange-900/30 px-2 py-0.5 rounded-full mt-2 inline-block">سحابي</span>
                 </Card>
-                <Card className="text-center flex flex-col items-center justify-center p-6 transition-transform hover:-translate-y-1">
+                <Card onClick={() => setActiveTab(2)} className="text-center flex flex-col items-center justify-center p-6 transition-transform hover:-translate-y-1">
                     <div className="bg-purple-100 dark:bg-purple-900/30 p-4 rounded-full text-purple-600 dark:text-purple-400 mb-4 inline-flex shadow-sm">
                         <CheckCircle size={28} />
                     </div>
@@ -682,7 +682,7 @@ export default function AdminDashboard() {
                       <td className="p-4 text-gray-500 dark:text-gray-400">{t.phone}</td>
                       <td className="p-4 flex gap-2">
                           <button onClick={() => openEditModal(t)} className="p-1.5 text-blue-600 bg-blue-50 rounded hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400" title="تعديل"><Edit size={16} /></button>
-                          <button onClick={() => handleDeleteUser(t.id, t.name)} className="p-1.5 text-red-600 bg-red-50 rounded hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400" title="حذف"><Trash2 size={16} /></button>
+                          {/* Deleted trash button as requested */}
                       </td>
                     </tr>
                   ))}
@@ -853,6 +853,170 @@ export default function AdminDashboard() {
                 </div>
                 </Card>
             </div>
+        </div>
+      )}
+
+      {activeTab === 3 && (
+        <div className="grid lg:grid-cols-2 gap-6">
+            <Card title="إضافة مصدر تعليمي جديد">
+                <form onSubmit={handleAddResource} className="space-y-4">
+                    <Input icon={Type} label="عنوان المصدر" value={rTitle} onChange={(e) => setRTitle(e.target.value)} required placeholder="اسم الكتاب أو الفيديو..." />
+                    
+                    <div className="mb-4">
+                       <label className="block text-sm font-bold text-navy dark:text-gray-300 mb-2">نوع المصدر</label>
+                       <select 
+                           value={rType} 
+                           onChange={(e) => setRType(e.target.value as any)}
+                           className="w-full px-3 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20"
+                       >
+                           <option value="pdf">ملف PDF</option>
+                           <option value="video">فيديو</option>
+                           <option value="link">رابط موقع</option>
+                       </select>
+                   </div>
+
+                    <Input icon={AlignLeft} label="وصف مختصر" value={rDesc} onChange={(e) => setRDesc(e.target.value)} placeholder="شرح عن محتوى المصدر..." />
+                    <Input icon={LinkIcon} label="رابط المصدر" value={rLink} onChange={(e) => setRLink(e.target.value)} required placeholder="https://..." />
+                    
+                    <Button type="submit" className="w-full">
+                        <Upload size={18} /> نشر للمكتبة
+                    </Button>
+                </form>
+            </Card>
+
+            <Card title="محتويات المكتبة الحالية" action={<Badge color="purple">{resources.length} عنصر</Badge>}>
+                <div className="space-y-4 max-h-[500px] overflow-y-auto">
+                    {resources.map(r => (
+                        <div key={r.id} className="p-4 border border-gray-100 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 hover:shadow-md transition-all flex justify-between items-start">
+                             <div className="flex items-start gap-3">
+                                <div className="p-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg">
+                                    {r.type === 'pdf' ? <FileText size={20} /> : r.type === 'video' ? <Video size={20} /> : <LinkIcon size={20} />}
+                                </div>
+                                <div>
+                                    <h4 className="font-bold text-navy dark:text-white">{r.title}</h4>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-2">{r.description}</p>
+                                    <div className="flex items-center gap-3">
+                                        <a href={r.link} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+                                            <ExternalLink size={12} /> فتح الرابط
+                                        </a>
+                                        <span className="text-[10px] bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded text-gray-600 dark:text-gray-300">
+                                            {r.target_audience === 'all' ? 'عام للجميع' : 'مخصص لمجموعة'}
+                                        </span>
+                                    </div>
+                                </div>
+                             </div>
+                             <button 
+                                onClick={() => {
+                                    if(window.confirm('حذف هذا المصدر؟')) {
+                                        db.deleteResource(r.id);
+                                    }
+                                }}
+                                className="text-red-400 hover:text-red-600 p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
+                            >
+                                <Trash2 size={16} />
+                            </button>
+                        </div>
+                    ))}
+                    {resources.length === 0 && <p className="text-center text-gray-400 py-8">المكتبة فارغة حالياً.</p>}
+                </div>
+            </Card>
+        </div>
+      )}
+
+      {activeTab === 4 && (
+        <div className="grid lg:grid-cols-2 gap-6">
+             <Card title="جدولة اجتماع جديد (Zoom / Meet)">
+                <form onSubmit={handleAddMeeting} className="space-y-4">
+                    <Input icon={Type} label="موضوع الاجتماع" value={mTopic} onChange={(e) => setMTopic(e.target.value)} required placeholder="مناقشة المشروع الأول..." />
+                    <Input icon={LinkIcon} label="رابط الاجتماع" value={mLink} onChange={(e) => setMLink(e.target.value)} required placeholder="https://zoom.us/j/..." />
+                    
+                    <div className="mb-4">
+                       <label className="block text-sm font-bold text-navy dark:text-gray-300 mb-2">الفئة المستهدفة</label>
+                       <select 
+                           value={mTarget} 
+                           onChange={(e) => setMTarget(e.target.value as any)}
+                           className="w-full px-3 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20"
+                       >
+                           <option value="all">الجميع (مدربين ومتدربين)</option>
+                           <option value="trainers">مسئولي المجموعات فقط</option>
+                           <option value="group">مجموعة محددة</option>
+                       </select>
+                   </div>
+
+                   {mTarget === 'group' && (
+                       <Select 
+                            label="اختر المجموعة (بواسطة المسئول)"
+                            value={mGroupId}
+                            onChange={(e) => setMGroupId(e.target.value)}
+                            options={trainers.map(t => ({ label: `مجموعة: ${t.name}`, value: t.id }))}
+                       />
+                   )}
+                    
+                    <Button type="submit" className="w-full" variant="primary">
+                        <Video size={18} /> نشر الاجتماع
+                    </Button>
+                </form>
+            </Card>
+
+            <Card title="الاجتماعات المجدولة" action={<Badge color="blue">{meetings.length} اجتماع</Badge>}>
+                <div className="space-y-4">
+                    {meetings.map(m => {
+                        const recipients = getMeetingRecipients(m);
+                        const isExpanded = expandedMeetingId === m.id;
+                        
+                        return (
+                            <div key={m.id} className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden bg-white dark:bg-gray-800">
+                                <div className="p-4 flex justify-between items-start bg-gray-50 dark:bg-gray-700/30">
+                                    <div>
+                                        <h4 className="font-bold text-navy dark:text-white flex items-center gap-2">
+                                            <Video size={16} className="text-blue-500" />
+                                            {m.topic}
+                                        </h4>
+                                        <p className="text-xs text-gray-500 mt-1">{new Date(m.created_at).toLocaleString('ar-EG')}</p>
+                                    </div>
+                                    <Badge color="blue">{m.target_audience === 'all' ? 'الجميع' : m.target_audience === 'trainers' ? 'المسئولين' : 'مجموعة خاصة'}</Badge>
+                                </div>
+                                
+                                <div className="p-4 border-t border-gray-100 dark:border-gray-700">
+                                    <div className="flex gap-2 mb-3">
+                                        <a href={m.link} target="_blank" rel="noreferrer" className="flex-1 bg-blue-600 text-white text-center py-2 rounded-lg text-sm font-bold hover:bg-blue-700">
+                                            دخول الاجتماع
+                                        </a>
+                                        <button 
+                                            onClick={() => setExpandedMeetingId(isExpanded ? null : m.id)}
+                                            className="px-3 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-lg hover:bg-green-200"
+                                            title="دعوة عبر واتساب"
+                                        >
+                                            <MessageCircle size={20} />
+                                        </button>
+                                    </div>
+                                    
+                                    {isExpanded && (
+                                        <div className="mt-3 animate-fadeIn bg-green-50 dark:bg-green-900/10 p-3 rounded-lg">
+                                            <p className="text-xs font-bold text-green-800 dark:text-green-300 mb-2">إرسال دعوات واتساب ({recipients.length} مستلم):</p>
+                                            <div className="max-h-40 overflow-y-auto space-y-2 pr-1">
+                                                {recipients.map(u => (
+                                                    <div key={u.id} className="flex justify-between items-center bg-white dark:bg-gray-800 p-2 rounded border border-green-100 dark:border-green-800/30">
+                                                        <span className="text-xs text-gray-700 dark:text-gray-300">{u.name}</span>
+                                                        <button 
+                                                            onClick={() => sendWhatsapp(u.phone || '', u.name, m.topic, m.link)}
+                                                            className="text-green-600 hover:text-green-800"
+                                                        >
+                                                            <Send size={14} />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                                {recipients.length === 0 && <p className="text-xs text-gray-400">لا يوجد مستلمين لديهم أرقام هاتف.</p>}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                    {meetings.length === 0 && <p className="text-center text-gray-400 py-8">لا توجد اجتماعات مجدولة.</p>}
+                </div>
+            </Card>
         </div>
       )}
 
