@@ -1,3 +1,4 @@
+
 export type UserRole = 'admin' | 'trainer' | 'trainee';
 
 export interface User {
@@ -72,4 +73,5 @@ export interface FirebaseConfig {
   storageBucket: string;
   messagingSenderId: string;
   appId: string;
+  measurementId?: string;
 }
