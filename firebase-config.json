@@ -1,9 +1,24 @@
-{
-  "apiKey": "AIzaSyBt5pBiY3TWVJzj8FMz7l7m9RMIbmhOxpo",
-  "authDomain": "training-app-cloud.firebaseapp.com",
-  "projectId": "training-app-cloud",
-  "storageBucket": "training-app-cloud.firebasestorage.app",
-  "messagingSenderId": "93857700118",
-  "appId": "1:93857700118:web:4cca0f47d88646b7bd9837",
-  "measurementId": "G-BQ5G4P2GG5"
-}
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getFirestore } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
+import { getStorage } from "firebase/storage";
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyBt5pBiY3TWVJzj8FMz7l7m9RMIbmhOxpo",
+  authDomain: "training-app-cloud.firebaseapp.com",
+  projectId: "training-app-cloud",
+  storageBucket: "training-app-cloud.firebasestorage.app",
+  messagingSenderId: "93857700118",
+  appId: "1:93857700118:web:4cca0f47d88646b7bd9837",
+  measurementId: "G-BQ5G4P2GG5"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+
+// Export services to use them in other files
+export const db = getFirestore(app);
+export const auth = getAuth(app);
+export const storage = getStorage(app);
