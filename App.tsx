@@ -5,6 +5,8 @@ import TrainerDashboard from './pages/TrainerDashboard';
 import TraineeDashboard from './pages/TraineeDashboard';
 import Layout from './components/Layout';
 import { User } from './types';
+import { db } from './firebase'; // استدعاء الملف الذي أنشأناه
+import { collection, addDoc } from "firebase/firestore";
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -58,6 +60,13 @@ export default function App() {
       return <Login onLogin={handleLogin} />;
   }
 
+  const saveData = async (userData) => {
+  try {
+    await addDoc(collection(db, "users"), userData);
+    console.log("تم الحفظ في السحابة!");
+  } catch (e) {
+    console.error("Error adding document: ", e);
+    
   return (
     <Layout user={user} onLogout={handleLogout} isDarkMode={isDarkMode} toggleTheme={toggleTheme}>
         {user.role === 'admin' && <AdminDashboard />}
