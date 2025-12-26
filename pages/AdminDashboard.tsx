@@ -63,10 +63,6 @@ export default function AdminDashboard() {
   const [uploadLink, setUploadLink] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   
-  // Firebase Config State
-  const [fbConfigJson, setFbConfigJson] = useState('');
-  const [showFbModal, setShowFbModal] = useState(false);
-
   useEffect(() => {
     refreshData();
     // Real-time listener for multi-tab sync
@@ -232,62 +228,6 @@ export default function AdminDashboard() {
       }
   }
   
-  const handleConnectCloud = () => {
-      try {
-          // Robust parsing for various copy-paste formats (JS object, JSON, with/without const/;)
-          let input = fbConfigJson.trim();
-          
-          // Remove variable declaration (const config = ...)
-          input = input.replace(/^(const|var|let)\s+\w+\s*=\s*/, '');
-          
-          // Remove trailing semicolon
-          input = input.replace(/;$/, '');
-          
-          // Ensure keys are quoted (fixes JavaScript object syntax: key: "value" -> "key": "value")
-          input = input.replace(/(\w+)\s*:/g, '"$1":');
-          
-          // Normalize quotes (single to double)
-          input = input.replace(/'/g, '"');
-          
-          // Remove trailing commas (which are invalid in JSON)
-          input = input.replace(/,\s*}/g, '}');
-          input = input.replace(/,\s*]/g, ']');
-
-          const config = JSON.parse(input);
-          
-          if(!config.apiKey || !config.projectId) throw new Error("بيانات غير مكتملة (apiKey أو projectId مفقود)");
-          
-          db.saveCloudConfig(config);
-          setShowFbModal(false);
-      } catch (e) {
-          console.error(e);
-          alert("تنسيق البيانات غير صحيح.\n\nنصيحة: انسخ فقط المحتوى الموجود بين القوسين { ... } من إعدادات Firebase.");
-      }
-  };
-
-  const handleDisconnectCloud = () => {
-      if(window.confirm("هل تريد قطع الاتصال بقاعدة البيانات السحابية والعودة للوضع المحلي؟")) {
-          db.disconnectCloud();
-      }
-  };
-
-  const handleEmailBackup = () => {
-      // Create a simplified report for the email body
-      const summary = `
-تقرير النظام - ${new Date().toLocaleDateString('ar-EG')}
-------------------------------------------------
-عدد المتدربين: ${traineesCount}
-عدد مسئولي المجموعات: ${trainers.length}
-عدد الملفات المرفوعة: ${allFiles.length}
-------------------------------------------------
-رابط المنصة: ${window.location.origin}
-`;
-      const subject = encodeURIComponent(`نسخة احتياطية للنظام - ${new Date().toLocaleDateString('ar-EG')}`);
-      const body = encodeURIComponent(summary + "\n\n(يرجى استخدام خيار 'تصدير النسخة الكاملة JSON' من الموقع للحصول على قاعدة البيانات الكاملة)");
-      
-      window.location.href = `mailto:peterfathi2020@gmail.com?subject=${subject}&body=${body}`;
-  };
-
   const handleCopyLink = () => {
       const url = window.location.origin;
       navigator.clipboard.writeText(url).then(() => {
@@ -388,30 +328,6 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Firebase Config Modal */}
-      {showFbModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-              <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-lg shadow-2xl p-6">
-                  <h3 className="text-xl font-bold mb-4 flex items-center gap-2 text-navy dark:text-white">
-                      <Globe size={24} className="text-blue-500" /> إعداد الاتصال السحابي (Firebase)
-                  </h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-300 mb-4">
-                      لجعل التطبيق يعمل أونلاين من أي جهاز، قم بإنشاء مشروع جديد على <a href="https://console.firebase.google.com" target="_blank" className="text-blue-500 underline">Firebase Console</a>، ثم انسخ كائن الإعدادات (firebaseConfig) والصقه هنا.
-                  </p>
-                  <textarea 
-                    className="w-full h-40 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl p-3 font-mono text-xs mb-4"
-                    placeholder='{ "apiKey": "...", "authDomain": "...", ... }'
-                    value={fbConfigJson}
-                    onChange={(e) => setFbConfigJson(e.target.value)}
-                  ></textarea>
-                  <div className="flex gap-3">
-                      <Button onClick={handleConnectCloud} className="flex-1">اتصال وحفظ</Button>
-                      <Button onClick={() => setShowFbModal(false)} variant="secondary">إلغاء</Button>
-                  </div>
-              </div>
-          </div>
-      )}
-
       {/* Edit User Modal */}
       {editingUser && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
@@ -467,43 +383,24 @@ export default function AdminDashboard() {
           <div className="space-y-6">
             
             {/* Cloud Status Panel */}
-            <div className={`rounded-2xl p-6 text-white shadow-lg relative overflow-hidden transition-all duration-500 ${isCloud ? 'bg-gradient-to-r from-blue-600 to-indigo-700' : 'bg-gradient-to-r from-gray-600 to-gray-700'}`}>
+            <div className={`rounded-2xl p-6 text-white shadow-lg relative overflow-hidden transition-all duration-500 ${isCloud ? 'bg-gradient-to-r from-blue-600 to-indigo-700' : 'bg-gradient-to-r from-red-600 to-red-700'}`}>
                 <div className="absolute top-0 left-0 w-full h-full opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
                 <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
                     <div className="flex items-center gap-4">
                         <div className={`p-3 rounded-full backdrop-blur-sm ${isCloud ? 'bg-green-400/20' : 'bg-white/20'}`}>
-                            {isCloud ? <Wifi size={32} className="text-green-300" /> : <WifiOff size={32} className="text-gray-300" />}
+                            {isCloud ? <Wifi size={32} className="text-green-300" /> : <WifiOff size={32} className="text-white" />}
                         </div>
                         <div>
                             <h2 className="text-2xl font-bold mb-1 flex items-center gap-2">
-                                {isCloud ? 'متصل بقاعدة البيانات العالمية' : 'الوضع المحلي (Offline Mode)'}
+                                {isCloud ? 'متصل بقاعدة البيانات العالمية' : 'اتصال منقطع (Offline)'}
                                 {isCloud && <span className="bg-green-400 text-green-900 text-xs px-2 py-0.5 rounded-full font-bold">Live</span>}
                             </h2>
                             <p className="text-blue-100 text-sm">
                                 {isCloud 
                                     ? 'يتم الآن مزامنة جميع البيانات لحظياً بين جميع الأجهزة (الإدارة، المسئولين، المتدربين).'
-                                    : 'تعمل البيانات على هذا الجهاز فقط. للربط بين الأجهزة، قم بتفعيل الاتصال السحابي.'}
+                                    : 'جاري محاولة الاتصال... تأكد من اتصالك بالإنترنت.'}
                             </p>
                         </div>
-                    </div>
-                    <div className="flex gap-3">
-                        {!isCloud ? (
-                            <button 
-                                onClick={() => setShowFbModal(true)}
-                                className="flex items-center gap-2 bg-white text-gray-800 px-5 py-2.5 rounded-xl font-bold hover:bg-blue-50 transition-all border border-transparent hover:border-blue-200 shadow-lg"
-                            >
-                                <Globe size={18} />
-                                ربط قاعدة بيانات سحابية
-                            </button>
-                        ) : (
-                            <button 
-                                onClick={handleDisconnectCloud}
-                                className="flex items-center gap-2 bg-red-500/20 text-white border border-red-400/50 px-5 py-2.5 rounded-xl font-bold hover:bg-red-500/30 transition-all"
-                            >
-                                <WifiOff size={18} />
-                                قطع الاتصال
-                            </button>
-                        )}
                     </div>
                 </div>
             </div>
@@ -634,6 +531,7 @@ export default function AdminDashboard() {
           </div>
       )}
 
+      {/* Other Tabs Content Remains Same (Hidden for Brevity but Preserved) */}
       {activeTab === 1 && (
         <div className="grid lg:grid-cols-2 gap-6">
           <Card title="إضافة حساب مسئول مجموعة جديد">

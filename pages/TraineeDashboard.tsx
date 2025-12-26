@@ -14,6 +14,7 @@ export default function TraineeDashboard({ user }: { user: User }) {
   const [desc, setDesc] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   // Notifications
   const [notifications, setNotifications] = useState<FileRecord[]>([]);
@@ -75,18 +76,27 @@ export default function TraineeDashboard({ user }: { user: User }) {
     if (!selectedFile) return;
 
     setIsUploading(true);
+    setUploadProgress(0);
+
     try {
         let fileUrl = undefined;
         if (db.isCloudConnected) {
-            fileUrl = await db.uploadFileToCloud(selectedFile, 'trainee_uploads');
+            fileUrl = await db.uploadFileToCloud(selectedFile, 'trainee_uploads', (progress) => {
+                setUploadProgress(progress);
+            });
         }
+
+        // Simulate a small progress for local upload
+        if (!db.isCloudConnected) setUploadProgress(100);
 
         await db.addFile(user.id, selectedFile.name, desc, fileUrl);
         alert(`تم إرسال الملف "${selectedFile.name}" بنجاح إلى مسئول المجموعة ${trainer ? trainer.name : ''}`);
         setDesc('');
         setSelectedFile(null);
+        setUploadProgress(0);
     } catch (error: any) {
         alert("فشل رفع الملف: " + error.message);
+        setUploadProgress(0);
     } finally {
         setIsUploading(false);
     }
@@ -234,6 +244,13 @@ export default function TraineeDashboard({ user }: { user: User }) {
                         placeholder="مثال: الواجب الأول - تصميم حقيبة يد"
                         required
                        />
+                       
+                       {isUploading && (
+                         <div className="animate-fadeIn">
+                             <ProgressBar progress={uploadProgress} label={db.isCloudConnected ? "جاري الرفع للسحابة..." : "جاري المعالجة..."} />
+                         </div>
+                       )}
+
                        <Button type="submit" className="w-full" disabled={!selectedFile || isUploading} isLoading={isUploading}>
                            <Send size={16} />
                            {isUploading ? 'جاري الرفع...' : 'رفع وإرسال'}
