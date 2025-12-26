@@ -1,6 +1,6 @@
 import { User, FileRecord, Meeting, UserRole, Resource, AttendanceRecord, LoginLog, FirebaseConfig } from '../types';
-import { initializeApp, FirebaseApp } from 'firebase/app';
-import { getFirestore, Firestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc, query, where, getDocs } from 'firebase/firestore';
+import { initializeApp, FirebaseApp, getApps, getApp } from 'firebase/app';
+import { getFirestore, Firestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc, query, where, getDocs, enableIndexedDbPersistence } from 'firebase/firestore';
 import { getStorage, FirebaseStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const STORAGE_KEYS = {
@@ -8,10 +8,21 @@ const STORAGE_KEYS = {
   FILES: 'bd_files',
   MEETINGS: 'bd_meetings',
   RESOURCES: 'bd_resources',
-  ATTENDANCE: 'bd_attendance',
+  ATTENDANCE: 'bd_announcement',
   ANNOUNCEMENT: 'bd_announcement',
   LOGIN_LOGS: 'bd_login_logs',
   FIREBASE_CONFIG: 'bd_firebase_config'
+};
+
+// Hardcoded Config (Fixed Online Connection)
+const HARDCODED_FIREBASE_CONFIG: FirebaseConfig = {
+  apiKey: "AIzaSyBt5pBiY3TWVJzj8FMz7l7m9RMIbmhOxpo",
+  authDomain: "training-app-cloud.firebaseapp.com",
+  projectId: "training-app-cloud",
+  storageBucket: "training-app-cloud.firebasestorage.app",
+  messagingSenderId: "93857700118",
+  appId: "1:93857700118:web:131af4b7b347a4a5bd9837",
+  measurementId: "G-60ZST0YJ6P"
 };
 
 // Seed Data
@@ -24,8 +35,8 @@ const DEFAULT_ADMIN: User = {
   phone: '0000000000',
 };
 
-class MockDatabase {
-  // In-Memory Cache
+class DatabaseService {
+  // In-Memory Cache (Synced with Cloud)
   private _users: User[] = [];
   private _files: FileRecord[] = [];
   private _meetings: Meeting[] = [];
@@ -60,108 +71,108 @@ class MockDatabase {
   }
 
   private async init() {
-    // 1. Try to load from firebase-config.json automatically
-    try {
-        const response = await fetch('/firebase-config.json');
-        if (response.ok) {
-            const config = await response.json();
-            console.log("Found firebase-config.json, attempting connection...");
-            this.initializeFirebase(config);
-            return;
-        }
-    } catch (e) {
-        // File not found or fetch error, proceed to storage
-        console.log("No local firebase-config.json found.");
-    }
+    console.log("🚀 Initializing Database Service...");
 
-    // 2. Check for Firebase Config in LocalStorage
-    const savedConfig = localStorage.getItem(STORAGE_KEYS.FIREBASE_CONFIG);
-    if (savedConfig) {
-        try {
-            const config = JSON.parse(savedConfig);
-            this.initializeFirebase(config);
-            return;
-        } catch (e) {
-            console.error("Firebase Init Error (Storage):", e);
-            this.isCloudConnected = false;
-        }
-    }
-
-    // 3. Fallback to LocalStorage if no cloud
-    this.loadFromLocalStorage();
-    this.ensureAdminExists();
+    // ALWAYS use the hardcoded config provided to ensure the app is online
+    console.log("🔌 Connecting to Firebase Cloud (Hardcoded)...");
+    await this.initializeFirebase(HARDCODED_FIREBASE_CONFIG);
   }
 
-  private initializeFirebase(config: FirebaseConfig) {
+  private async initializeFirebase(config: FirebaseConfig) {
       try {
-          this.firebaseApp = initializeApp(config);
+          // Check if app already initialized to avoid errors in dev HMR
+          if (getApps().length === 0) {
+              this.firebaseApp = initializeApp(config);
+          } else {
+              this.firebaseApp = getApp();
+          }
+
           this.firestore = getFirestore(this.firebaseApp);
           this.storage = getStorage(this.firebaseApp);
+          
           this.isCloudConnected = true;
           this.setupRealtimeListeners();
-          console.log("🔥 Connected to Firebase Cloud Database & Storage");
+          console.log("✅ 🔥 Firebase Connected Successfully!");
       } catch (e) {
-          console.error("Firebase Connection Error:", e);
-          this.isCloudConnected = false;
-          // Fallback to local
-          this.loadFromLocalStorage();
-          this.ensureAdminExists();
+          console.error("❌ Firebase Connection Failed:", e);
+          // Only fallback if connection completely fails
+          this.fallbackToLocal();
       }
+  }
+
+  private fallbackToLocal() {
+      this.isCloudConnected = false;
+      this.loadFromLocalStorage();
+      this.ensureAdminExists();
+      console.log("📂 System running in Local Storage Mode (Offline)");
   }
 
   // --- Cloud Setup ---
   
   public saveCloudConfig(config: FirebaseConfig) {
+      // Kept for compatibility, but hardcoded config takes precedence in init()
       localStorage.setItem(STORAGE_KEYS.FIREBASE_CONFIG, JSON.stringify(config));
-      window.location.reload(); // Reload to initialize firebase
+      window.location.reload(); 
   }
 
   public disconnectCloud() {
       localStorage.removeItem(STORAGE_KEYS.FIREBASE_CONFIG);
+      // Note: Since config is hardcoded, reloading will just reconnect. 
+      // To truly disconnect, one would need to be offline or remove the hardcoded config in code.
       window.location.reload();
   }
 
   // --- File Upload Logic ---
   public async uploadFileToCloud(file: File, folder: string = 'files'): Promise<string> {
       if (!this.isCloudConnected || !this.storage) {
-          throw new Error("Cloud not connected");
+          throw new Error("يجب الاتصال بالإنترنت وقاعدة البيانات السحابية لرفع الملفات.");
       }
       
-      const storageRef = ref(this.storage, `${folder}/${Date.now()}_${file.name}`);
-      const snapshot = await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(snapshot.ref);
-      return downloadURL;
+      try {
+          // Create a reference
+          const storageRef = ref(this.storage, `${folder}/${Date.now()}_${file.name}`);
+          // Upload
+          const snapshot = await uploadBytes(storageRef, file);
+          // Get URL
+          const downloadURL = await getDownloadURL(snapshot.ref);
+          return downloadURL;
+      } catch (error: any) {
+          console.error("Upload Error:", error);
+          throw new Error("فشل رفع الملف: " + error.message);
+      }
   }
 
   private setupRealtimeListeners() {
       if (!this.firestore) return;
 
-      // Users
+      // Users Listener
       onSnapshot(collection(this.firestore, 'users'), (snapshot) => {
           this._users = snapshot.docs.map(doc => ({ ...doc.data(), id: Number(doc.id) } as User));
           this.ensureAdminExists(); 
           this.notifyListeners();
+      }, (error) => {
+          console.error("Auth Listener Error:", error);
       });
 
-      // Files
+      // Files Listener
       onSnapshot(collection(this.firestore, 'files'), (snapshot) => {
           this._files = snapshot.docs.map(doc => ({ ...doc.data(), id: Number(doc.id) } as FileRecord));
           this.notifyListeners();
       });
 
-      // Resources
+      // Resources Listener
       onSnapshot(collection(this.firestore, 'resources'), (snapshot) => {
           this._resources = snapshot.docs.map(doc => ({ ...doc.data(), id: Number(doc.id) } as Resource));
           this.notifyListeners();
       });
 
-       // Meetings
+       // Meetings Listener
        onSnapshot(collection(this.firestore, 'meetings'), (snapshot) => {
         this._meetings = snapshot.docs.map(doc => ({ ...doc.data(), id: Number(doc.id) } as Meeting));
         this.notifyListeners();
        });
 
-       // Announcement
+       // Announcement Listener
        onSnapshot(collection(this.firestore, 'settings'), (snapshot) => {
            const data = snapshot.docs.find(d => d.id === 'announcement')?.data();
            if (data) {
@@ -170,7 +181,7 @@ class MockDatabase {
            }
        });
        
-       // Attendance
+       // Attendance Listener
        onSnapshot(collection(this.firestore, 'attendance'), (snapshot) => {
            this._attendance = snapshot.docs.map(doc => ({ ...doc.data(), id: Number(doc.id) } as AttendanceRecord));
            this.notifyListeners();
@@ -206,7 +217,12 @@ class MockDatabase {
   private ensureAdminExists() {
       const adminIndex = this._users.findIndex(u => u.role === 'admin' && u.id === 1);
       if (adminIndex === -1) {
-          this._users.push(DEFAULT_ADMIN);
+          if (this.isCloudConnected && this.firestore) {
+              // Create default admin in cloud if not exists
+              setDoc(doc(this.firestore, 'users', '1'), DEFAULT_ADMIN).catch(console.error);
+          } else {
+              this._users.push(DEFAULT_ADMIN);
+          }
       }
   }
 
@@ -302,8 +318,9 @@ class MockDatabase {
           role: user.role,
           timestamp: new Date().toLocaleString('ar-EG')
       };
+      // Keep only local logs for simplicity or add 'login_logs' collection in cloud if needed
       this._loginLogs = [newLog, ...this._loginLogs].slice(0, 500);
-      this.saveToStorage(STORAGE_KEYS.LOGIN_LOGS, this._loginLogs); // Logs kept local for now or extended to firestore later
+      this.saveToStorage(STORAGE_KEYS.LOGIN_LOGS, this._loginLogs); 
   }
 
   getLoginLogs(): LoginLog[] {
@@ -439,11 +456,9 @@ class MockDatabase {
 
   async saveAttendance(records: Omit<AttendanceRecord, 'id'>[]) {
     // In local mode, we replace. In Cloud mode, we should ideally upsert.
-    // Simplifying for hybrid: add new records, we won't delete old ones for same day in cloud for now to avoid complexity
+    // Simplifying for hybrid: add new records
     
     if (this.isCloudConnected && this.firestore) {
-        // Delete existing for this trainer/date to avoid dupes (naive approach)
-        // A better approach would be batched writes, but let's just write new ones
         records.forEach(async r => {
             const id = Number(`${r.trainee_id}${r.date.replace(/-/g, '')}`);
             await setDoc(doc(this.firestore!, 'attendance', String(id)), { ...r, id });
@@ -472,7 +487,7 @@ class MockDatabase {
       }
   }
 
-  // --- Backup & Export (Kept for local utility) ---
+  // --- Backup & Export ---
 
   exportDB() {
       const data = {
@@ -540,7 +555,6 @@ class MockDatabase {
               throw new Error("Invalid Backup Format: Missing users");
           }
 
-          // If cloud is connected, we might want to prevent overwrite or warn user
           if (this.isCloudConnected) {
               alert("تحذير: أنت متصل بالسحابة. لا يمكن استيراد بيانات محلية فوق قاعدة بيانات سحابية مباشرة.");
               return false;
@@ -568,4 +582,4 @@ class MockDatabase {
   }
 }
 
-export const db = new MockDatabase();
+export const db = new DatabaseService();
