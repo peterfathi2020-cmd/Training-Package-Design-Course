@@ -74,7 +74,9 @@ export default function TrainerDashboard({ user }: { user: User }) {
 
     const allFiles = db.getFiles();
     const myTraineesIds = myTrainees.map(t => t.id);
-    const relevantFiles = allFiles.filter(f => myTraineesIds.includes(f.user_id));
+    // Show files where (User is my trainee AND sender is trainee) OR (User is my trainee AND sender is ME)
+    // Actually, Trainer wants to see files sent BY trainees.
+    const relevantFiles = allFiles.filter(f => myTraineesIds.includes(f.user_id) && f.sender_id !== user.id);
     // Sort by newest first
     relevantFiles.sort((a, b) => b.id - a.id);
     setFiles(relevantFiles);
@@ -202,8 +204,15 @@ export default function TrainerDashboard({ user }: { user: User }) {
             setUploadProgress(progress);
         });
 
-        await db.addFile(Number(uploadTraineeId), uploadFile.name, uploadDesc || 'ملف من مسئول المجموعة', fileUrl);
-        alert('تم رفع الملف وتخزينه سحابياً بنجاح ✅');
+        await db.addFile(
+            Number(uploadTraineeId), 
+            uploadFile.name, 
+            uploadDesc || 'ملف من مسئول المجموعة', 
+            fileUrl,
+            user, // Send Trainer as Sender
+            false
+        );
+        alert('تم إرسال الملف للمتدرب بنجاح ✅');
         setUploadFile(null);
         setUploadDesc('');
         setUploadTraineeId('');
@@ -419,7 +428,7 @@ export default function TrainerDashboard({ user }: { user: User }) {
              </div>
            </Card>
 
-           <Card title="رفع ملف لمتدرب (سحابي)">
+           <Card title="رفع ملف لمتدرب (Exchange)">
                 <form onSubmit={handleUploadForTrainee} className="space-y-4">
                      <Select 
                         label="اختر المتدرب"
@@ -444,20 +453,20 @@ export default function TrainerDashboard({ user }: { user: User }) {
                         </label>
                     </div>
                     <Input 
-                    label="وصف" 
+                    label="رسالة للمتدرب" 
                     value={uploadDesc} 
                     onChange={(e) => setUploadDesc(e.target.value)} 
-                    placeholder="مثال: الواجب المصحح..."
+                    placeholder="مثال: تصحيح الواجب..."
                     />
 
                     {isUploading && (
                          <div className="animate-fadeIn">
-                             <ProgressBar progress={uploadProgress} label="جاري الرفع إلى السحابة..." />
+                             <ProgressBar progress={uploadProgress} label="جاري الإرسال..." />
                          </div>
                     )}
 
                     <Button type="submit" className="w-full text-sm" disabled={!uploadFile || !uploadTraineeId || isUploading} isLoading={isUploading}>
-                        <Send size={14} /> {isUploading ? 'جاري الرفع...' : 'رفع وحفظ'}
+                        <Send size={14} /> {isUploading ? 'جاري الإرسال...' : 'إرسال للمتدرب'}
                     </Button>
                 </form>
            </Card>
@@ -628,35 +637,6 @@ export default function TrainerDashboard({ user }: { user: User }) {
                             <FolderOpen size={48} className="mx-auto mb-4 opacity-20" />
                             <p>لا توجد ملفات مرفوعة من طلابك بعد.</p>
                         </div>
-                    )}
-                </div>
-            </Card>
-
-            <Card title="مكتبة المجموعة (المصادر الخاصة)" action={<Badge color="purple">{resources.filter(r => r.uploaded_by === user.id).length} مصدر</Badge>}>
-                <div className="space-y-4">
-                    {resources.filter(r => r.uploaded_by === user.id).map(r => (
-                        <div key={r.id} className="flex justify-between items-center p-3 border dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
-                            <div className="flex items-center gap-3">
-                                <div className="bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 p-2 rounded">
-                                    {r.type === 'pdf' ? <FileText size={18}/> : r.type === 'video' ? <Video size={18}/> : <LinkIcon size={18}/>}
-                                </div>
-                                <div>
-                                    <h4 className="font-bold text-navy dark:text-white">{r.title}</h4>
-                                    <p className="text-xs text-gray-500">{r.created_at} | {r.description}</p>
-                                    <a href={r.link} target="_blank" rel="noreferrer" className="text-xs text-blue-500 hover:underline">عرض الرابط</a>
-                                </div>
-                            </div>
-                            <button 
-                                onClick={() => handleDeleteResource(r.id)} 
-                                className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                                title="حذف المصدر"
-                            >
-                                <Trash2 size={16} />
-                            </button>
-                        </div>
-                    ))}
-                    {resources.filter(r => r.uploaded_by === user.id).length === 0 && (
-                        <p className="text-center text-gray-400 py-4">لم تقم بإضافة مصادر خاصة للمجموعة بعد.</p>
                     )}
                 </div>
             </Card>

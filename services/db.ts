@@ -38,15 +38,25 @@ const HARDCODED_FIREBASE_CONFIG: FirebaseConfig = {
   measurementId: "G-LCR2L8KZZY"
 };
 
-// Seed Data
-const DEFAULT_ADMIN: User = {
-  id: 1,
-  email: 'peterfathi2020@gmail.com',
-  password: 'pepo_1759',
-  role: 'admin',
-  name: 'المدير العام',
-  phone: '0000000000',
-};
+// Seed Data (Admins)
+const DEFAULT_ADMINS: User[] = [
+  {
+    id: 1,
+    email: 'Sayedjica2016@gmail.com',
+    password: '123',
+    role: 'admin',
+    name: 'DR El Sayed Hamed',
+    phone: '0000000000',
+  },
+  {
+    id: 2,
+    email: 'peterfathi2020@gmail.com',
+    password: 'pepo_1759',
+    role: 'admin',
+    name: 'Peter Fathi',
+    phone: '0000000000',
+  }
+];
 
 class DatabaseService {
   // In-Memory Cache (Synced with Cloud)
@@ -94,8 +104,6 @@ class DatabaseService {
   private async initializeFirebase(config: FirebaseConfig) {
       try {
           // Handle HMR (Hot Module Replacement) scenarios
-          // If an app exists, delete it to ensure we get a fresh instance associated with the current module context.
-          // This fixes "Service firestore is not available" errors caused by stale app instances.
           if (getApps().length > 0) {
               try {
                   const currentApp = getApp();
@@ -109,8 +117,6 @@ class DatabaseService {
           this.firebaseApp = initializeApp(config);
 
           if (this.firebaseApp) {
-              // Use getFirestore directly. 
-              // Because we just created the app in this module scope, imports should match.
               this.firestore = getFirestore(this.firebaseApp);
               this.storage = getStorage(this.firebaseApp);
               this.isCloudConnected = true;
@@ -123,7 +129,6 @@ class DatabaseService {
           }
       } catch (e) {
           console.error("❌ Firebase Connection Failed:", e);
-          // Only fallback if connection completely fails
           this.fallbackToLocal();
       }
   }
@@ -143,15 +148,36 @@ class DatabaseService {
   }
 
   private ensureAdminExists() {
-      const adminExists = this._users.some(u => u.email === DEFAULT_ADMIN.email);
-      if (!adminExists) {
-          this._users.push(DEFAULT_ADMIN);
-          if (this.isCloudConnected && this.firestore) {
-              setDoc(doc(this.firestore, 'users', String(DEFAULT_ADMIN.id)), DEFAULT_ADMIN).catch(console.error);
-          } else {
-              this.saveToLocalStorage();
-          }
-      }
+      DEFAULT_ADMINS.forEach(admin => {
+        const existingAdminIndex = this._users.findIndex(u => u.email === admin.email);
+        
+        if (existingAdminIndex === -1) {
+            this._users.push(admin);
+            if (this.isCloudConnected && this.firestore) {
+                setDoc(doc(this.firestore, 'users', String(admin.id)), admin).catch(console.error);
+            } else {
+                this.saveToLocalStorage();
+            }
+        } else {
+            // Force update admin details if they differ from code
+            const current = this._users[existingAdminIndex];
+            const needsUpdate = current.password !== admin.password || 
+                                current.name !== admin.name || 
+                                current.role !== admin.role ||
+                                current.id !== admin.id;
+
+            if (needsUpdate) {
+               const updated = { ...current, ...admin }; // Enforce seed values
+               this._users[existingAdminIndex] = updated;
+               if (this.isCloudConnected && this.firestore) {
+                   setDoc(doc(this.firestore, 'users', String(updated.id)), updated, { merge: true }).catch(console.error);
+               } else {
+                   this.saveToLocalStorage();
+               }
+               console.log(`Admin credentials for ${admin.email} synced.`);
+            }
+        }
+      });
   }
 
   private safeStringify(obj: any): string {
@@ -373,19 +399,44 @@ class DatabaseService {
   }
 
   getFiles() { return this._files; }
-  async addFile(userId: number, filename: string, description: string, url?: string) {
-      const user = this.getUserById(userId);
+  
+  /**
+   * Universal Add File/Link Method
+   * @param targetUserId Who is receiving this file?
+   * @param filename Name of file or Link Title
+   * @param description 
+   * @param url Cloud URL or External Link
+   * @param sender The user sending the file (for exchange logic)
+   * @param isLink Is this just a link (text) or a file?
+   */
+  async addFile(
+      targetUserId: number, 
+      filename: string, 
+      description: string, 
+      url: string | undefined, 
+      sender: User,
+      isLink: boolean = false
+    ) {
+      const recipient = this.getUserById(targetUserId);
       const id = Date.now();
       const file: FileRecord = {
           id,
-          user_id: userId,
+          user_id: targetUserId, // Recipient
           filename,
           file_url: url,
           upload_date: new Date().toLocaleDateString('ar-EG'),
           description,
-          user_name: user?.name,
+          user_name: recipient?.name || 'مستخدم', // Name of the owner (Recipient)
+          
+          // Exchange Details
+          sender_id: sender.id,
+          sender_name: sender.name,
+          sender_role: sender.role,
+          is_link: isLink,
+          
           status: 'pending'
       };
+
       if (this.isCloudConnected && this.firestore) {
           await setDoc(doc(this.firestore, 'files', String(id)), file);
       } else {

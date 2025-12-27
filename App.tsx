@@ -60,7 +60,7 @@ export default function App() {
 
   return (
     <Layout user={user} onLogout={handleLogout} isDarkMode={isDarkMode} toggleTheme={toggleTheme}>
-        {user.role === 'admin' && <AdminDashboard />}
+        {user.role === 'admin' && <AdminDashboard user={user} />}
         {user.role === 'trainer' && <TrainerDashboard user={user} />}
         {user.role === 'trainee' && <TraineeDashboard user={user} />}
     </Layout>

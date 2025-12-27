@@ -13,13 +13,22 @@ export interface User {
 
 export interface FileRecord {
   id: number;
-  user_id: number;
+  user_id: number; // The RECIPIENT (Target User ID)
   filename: string;
   file_url?: string; // Added for cloud links
   upload_date: string;
   description: string;
-  user_name?: string; // Joined field
-  trainer_name?: string; // Joined field
+  
+  // Sender Details (For Exchange)
+  sender_id: number;
+  sender_name: string;
+  sender_role: UserRole;
+  
+  // Content Type
+  is_link: boolean; // true if it's a URL text, false if it's a file
+
+  // Status
+  user_name?: string; // Joined field (Recipient Name)
   score?: number; // 0-100
   feedback?: string;
   status: 'pending' | 'graded';

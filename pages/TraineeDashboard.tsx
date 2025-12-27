@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
 import { User, FileRecord, Meeting, Resource } from '../types';
 import { Card, Button, Input, Badge, ProgressBar } from '../components/ui';
-import { Upload, Video, MessageCircle, FileText, Send, Star, MessageSquare, BookOpen, Download, Bell, X, Sparkles, Lightbulb, Image as ImageIcon, X as CloseIcon, PlayCircle, Award, Trophy, Medal } from 'lucide-react';
+import { Upload, Video, MessageCircle, FileText, Send, Star, MessageSquare, BookOpen, Download, Bell, X, Sparkles, Lightbulb, Image as ImageIcon, X as CloseIcon, PlayCircle, Award, Trophy, Medal, Inbox, Link as LinkIcon, ExternalLink } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 
 export default function TraineeDashboard({ user }: { user: User }) {
   const [trainer, setTrainer] = useState<User | undefined>(undefined);
   const [myFiles, setMyFiles] = useState<FileRecord[]>([]);
+  const [receivedFiles, setReceivedFiles] = useState<FileRecord[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [resources, setResources] = useState<(Resource & { uploader_name?: string })[]>([]);
   
@@ -37,8 +38,15 @@ export default function TraineeDashboard({ user }: { user: User }) {
   const refreshData = () => {
     // Files
     const all = db.getFiles();
-    const my = all.filter(f => f.user_id === user.id);
-    setMyFiles(my);
+    
+    // 1. Files I sent (User ID matches mine, and I am the Sender or Sender is undefined)
+    const sent = all.filter(f => f.user_id === user.id && (f.sender_id === user.id || !f.sender_id));
+    
+    // 2. Files I received (User ID matches mine, but sender is NOT me)
+    const received = all.filter(f => f.user_id === user.id && f.sender_id && f.sender_id !== user.id);
+    
+    setMyFiles(sent);
+    setReceivedFiles(received);
 
     // Meetings
     const allMeetings = db.getMeetings();
@@ -108,7 +116,7 @@ export default function TraineeDashboard({ user }: { user: User }) {
             setUploadProgress(progress);
         });
 
-        await db.addFile(user.id, selectedFile.name, desc, fileUrl);
+        await db.addFile(user.id, selectedFile.name, desc, fileUrl, user, false);
         alert(`تم إرسال الملف "${selectedFile.name}" بنجاح إلى مسئول المجموعة.`);
         setDesc('');
         clearFile();
@@ -169,7 +177,7 @@ export default function TraineeDashboard({ user }: { user: User }) {
       }
       return (
         <div className={`p-3 rounded-full h-12 w-12 flex items-center justify-center bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400`}>
-            <FileText size={20} />
+            {f.is_link ? <LinkIcon size={20} /> : <FileText size={20} />}
         </div>
       );
   }
@@ -417,8 +425,67 @@ export default function TraineeDashboard({ user }: { user: User }) {
                </Card>
            </div>
 
-           <div className="lg:col-span-2">
-               <Card title="سجل ملفاتي وتقييمات مسئول المجموعة" className="h-full">
+           <div className="lg:col-span-2 space-y-6">
+                
+               {/* New Section: Received Files (Exchange) */}
+               <Card title="الوارد (ملفات/روابط مرسلة لك)" action={<Badge color="orange">{receivedFiles.length} عنصر</Badge>} className="border-orange-200 dark:border-orange-800 shadow-orange-100 dark:shadow-none">
+                   <div className="space-y-4">
+                        {receivedFiles.map(f => (
+                            <div key={f.id} className="border border-orange-100 dark:border-orange-900/50 rounded-xl p-4 hover:shadow-md transition-all bg-orange-50/30 dark:bg-gray-800">
+                                <div className="flex justify-between items-start mb-2">
+                                    <div className="flex items-start gap-3">
+                                        {/* Sender Avatar/Icon */}
+                                        <div className="flex flex-col items-center gap-1">
+                                            <div className="h-10 w-10 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 dark:text-orange-400">
+                                                <Inbox size={20} />
+                                            </div>
+                                            <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400">{f.sender_name}</span>
+                                        </div>
+
+                                        <div className="flex-1">
+                                            <h4 className="font-bold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                                                {f.is_link ? <LinkIcon size={14} className="text-blue-500" /> : <FileText size={14} className="text-gray-400" />}
+                                                {f.filename}
+                                            </h4>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">{f.upload_date}</p>
+                                        </div>
+                                    </div>
+                                    {f.is_link ? (
+                                         <Badge color="blue">رابط</Badge>
+                                    ) : (
+                                         <Badge color="green">ملف</Badge>
+                                    )}
+                                </div>
+                                
+                                <p className="text-sm text-gray-700 dark:text-gray-300 mb-3 bg-white dark:bg-gray-900 p-3 rounded border border-gray-100 dark:border-gray-700 leading-relaxed">
+                                    {f.description}
+                                </p>
+                                
+                                {f.file_url && (
+                                    <div className="mb-1">
+                                         <a 
+                                            href={f.file_url} 
+                                            target="_blank" 
+                                            rel="noreferrer"
+                                            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 text-sm font-bold bg-orange-600 text-white hover:bg-orange-700 px-4 py-2 rounded-lg transition-colors"
+                                         >
+                                             {f.is_link ? <ExternalLink size={16} /> : <Download size={16} />}
+                                             {f.is_link ? 'فتح الرابط' : 'تحميل الملف'}
+                                         </a>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                        {receivedFiles.length === 0 && (
+                            <div className="text-center py-8 text-gray-400">
+                                <Inbox size={32} className="mx-auto mb-2 opacity-20" />
+                                <p>صندوق الوارد فارغ. لم يتم إرسال أي ملفات لك بعد.</p>
+                            </div>
+                        )}
+                   </div>
+               </Card>
+
+               <Card title="سجل ملفاتي المرسلة (الصادر)">
                    <div className="space-y-4">
                         {myFiles.map(f => (
                             <div key={f.id} className="border border-gray-100 dark:border-gray-700 rounded-xl p-4 hover:shadow-sm transition-all bg-white dark:bg-gray-800">
