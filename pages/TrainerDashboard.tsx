@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
 import { User, FileRecord, Meeting, Resource } from '../types';
 import { Card, Badge, Button, Input, Select, ProgressBar } from '../components/ui';
-import { Users, File, Video, MessageSquare, CheckCircle, Upload, Link as LinkIcon, BookOpen, Library, AlignLeft, Send, Download, Calendar, Save, Settings, Lock, Phone, Trash2, FileText, Cloud, FolderOpen, Sparkles, X, Image as ImageIcon, PlayCircle } from 'lucide-react';
+import { Users, File, Video, MessageSquare, CheckCircle, Upload, Link as LinkIcon, BookOpen, Library, AlignLeft, Send, Download, Calendar, Save, Settings, Lock, Phone, Trash2, FileText, Cloud, FolderOpen, Sparkles, X, Image as ImageIcon, PlayCircle, Bell, Clock, EyeOff, ExternalLink } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 
 export default function TrainerDashboard({ user }: { user: User }) {
@@ -10,6 +10,9 @@ export default function TrainerDashboard({ user }: { user: User }) {
   const [files, setFiles] = useState<FileRecord[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [resources, setResources] = useState<Resource[]>([]);
+
+  // Notifications State (Local dismissal)
+  const [dismissedFileIds, setDismissedFileIds] = useState<number[]>([]);
 
   // Grading State
   const [editingFile, setEditingFile] = useState<number | null>(null);
@@ -72,6 +75,8 @@ export default function TrainerDashboard({ user }: { user: User }) {
     const allFiles = db.getFiles();
     const myTraineesIds = myTrainees.map(t => t.id);
     const relevantFiles = allFiles.filter(f => myTraineesIds.includes(f.user_id));
+    // Sort by newest first
+    relevantFiles.sort((a, b) => b.id - a.id);
     setFiles(relevantFiles);
 
     // Meetings
@@ -105,7 +110,17 @@ export default function TrainerDashboard({ user }: { user: User }) {
       setEditingFile(file.id);
       setScore(file.score?.toString() || '');
       setFeedback(file.feedback || '');
+      
+      // Scroll to the file card
+      const element = document.getElementById(`file-card-${file.id}`);
+      if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
   }
+
+  const handleDismissNotification = (id: number) => {
+      setDismissedFileIds(prev => [...prev, id]);
+  };
 
   const handleAiGrade = async (file: FileRecord) => {
       if (!process.env.API_KEY) {
@@ -239,9 +254,102 @@ export default function TrainerDashboard({ user }: { user: User }) {
       return <File size={14} />;
   }
 
+  // Helper to render media preview in cards
+  const renderMediaPreview = (f: FileRecord, small = true) => {
+      if (!f.file_url) return null;
+      const ext = f.filename.split('.').pop()?.toLowerCase() || '';
+      const sizeClass = small ? "h-16 w-16" : "h-32 w-full";
+      
+      if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
+          return (
+              <div className={`${sizeClass} rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 mb-2 flex-shrink-0 bg-gray-100 dark:bg-gray-900`}>
+                  <img src={f.file_url} alt={f.filename} className="w-full h-full object-cover" />
+              </div>
+          );
+      }
+      if (['mp4', 'webm', 'ogg'].includes(ext)) {
+        return (
+            <div className={`${sizeClass} rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 mb-2 flex-shrink-0 bg-black relative`}>
+                <video src={f.file_url} className="w-full h-full object-cover opacity-70" />
+                <div className="absolute inset-0 flex items-center justify-center text-white">
+                    <PlayCircle size={small ? 20 : 32} />
+                </div>
+            </div>
+        );
+      }
+      return null;
+  }
+
+  // Derived state for notifications
+  const pendingFiles = files.filter(f => f.status === 'pending' && !dismissedFileIds.includes(f.id));
+
   return (
     <div className="space-y-6">
       
+      {/* 🔔 Real-time Notifications Section */}
+      {pendingFiles.length > 0 && (
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-orange-100 dark:border-orange-900/50 relative overflow-hidden animate-fadeIn">
+              <div className="absolute top-0 right-0 w-full h-1 bg-gradient-to-r from-orange-400 to-red-500"></div>
+              <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-navy dark:text-white flex items-center gap-2">
+                      <div className="relative">
+                          <Bell className="text-orange-500 fill-orange-100 dark:fill-orange-900/30" size={24} />
+                          <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                          </span>
+                      </div>
+                      تنبيهات: ملفات جديدة بانتظار المراجعة ({pendingFiles.length})
+                  </h3>
+              </div>
+              
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                  {pendingFiles.slice(0, 6).map(f => (
+                      <div key={f.id} className="group bg-gray-50 dark:bg-gray-700/30 p-3 rounded-xl border border-gray-100 dark:border-gray-700 hover:shadow-md transition-all flex flex-col justify-between">
+                          <div>
+                              <div className="flex justify-between items-start">
+                                  <span className="text-xs font-bold text-primary dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-full mb-2 inline-block">
+                                      {f.user_name}
+                                  </span>
+                                  <span className="text-[10px] text-gray-400 flex items-center gap-1">
+                                      <Clock size={10} /> {f.upload_date}
+                                  </span>
+                              </div>
+                              <div className="flex gap-2">
+                                  {renderMediaPreview(f, true)}
+                                  <div className="flex-1 min-w-0">
+                                      <h4 className="text-sm font-bold text-navy dark:text-gray-200 mb-1 flex items-center gap-1 truncate">
+                                          {getFileIcon(f.filename)} {f.filename}
+                                      </h4>
+                                      <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">{f.description}</p>
+                                  </div>
+                              </div>
+                          </div>
+                          
+                          <div className="flex gap-2 mt-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+                              <button 
+                                  onClick={() => startGrading(f)}
+                                  className="flex-1 bg-primary text-white text-xs py-1.5 rounded-lg hover:bg-primary-dark transition flex items-center justify-center gap-1 font-bold shadow-sm"
+                              >
+                                  <CheckCircle size={12} /> تصحيح
+                              </button>
+                              <button 
+                                  onClick={() => handleDismissNotification(f.id)}
+                                  className="px-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                  title="إخفاء التنبيه"
+                              >
+                                  <EyeOff size={16} />
+                              </button>
+                          </div>
+                      </div>
+                  ))}
+              </div>
+              {pendingFiles.length > 6 && (
+                  <p className="text-center text-xs text-gray-400 mt-3">... وهناك {pendingFiles.length - 6} ملفات أخرى</p>
+              )}
+          </div>
+      )}
+
       {/* Meetings Alert */}
       {meetings.length > 0 && (
           <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-600 dark:border-blue-500 p-4 rounded shadow-sm flex justify-between items-center">
@@ -279,12 +387,34 @@ export default function TrainerDashboard({ user }: { user: User }) {
 
            <Card title="المتدربين التابعين لي" action={<Badge color="green">{trainees.length}</Badge>}>
              <div className="space-y-4 max-h-60 overflow-y-auto">
-                {trainees.map(t => (
-                    <div key={t.id} className="p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-white dark:hover:bg-gray-700 transition-colors">
-                        <div className="font-bold text-gray-800 dark:text-gray-200">{t.name}</div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">{t.email}</div>
-                    </div>
-                ))}
+                {trainees.map(t => {
+                    const traineeFiles = files.filter(f => f.user_id === t.id);
+                    const gradedCount = traineeFiles.filter(f => f.status === 'graded').length;
+                    const totalCount = traineeFiles.length;
+                    const progress = totalCount > 0 ? (gradedCount / totalCount) * 100 : 0;
+
+                    return (
+                        <div key={t.id} className="p-3 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-white dark:hover:bg-gray-700 transition-colors">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <div className="font-bold text-gray-800 dark:text-gray-200">{t.name}</div>
+                                    <div className="text-sm text-gray-500 dark:text-gray-400">{t.email}</div>
+                                </div>
+                                <span className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30 px-2 py-0.5 rounded">
+                                    {gradedCount}/{totalCount}
+                                </span>
+                            </div>
+                            
+                            {/* Mini Progress Bar */}
+                            <div className="mt-2 w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5">
+                                <div 
+                                    className="bg-green-500 h-1.5 rounded-full transition-all duration-500" 
+                                    style={{ width: `${progress}%` }}
+                                ></div>
+                            </div>
+                        </div>
+                    );
+                })}
                 {trainees.length === 0 && <p className="text-gray-400 text-center">لا يوجد متدربين</p>}
              </div>
            </Card>
@@ -399,7 +529,7 @@ export default function TrainerDashboard({ user }: { user: User }) {
             <Card title="مدير ملفات المتدربين (السحابة)" action={<Badge color="purple">{files.length} ملف</Badge>}>
                 <div className="space-y-6">
                     {files.map(f => (
-                        <div key={f.id} className={`border rounded-xl p-4 transition-all ${f.status === 'graded' ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-sm'}`}>
+                        <div key={f.id} id={`file-card-${f.id}`} className={`border rounded-xl p-4 transition-all ${f.status === 'graded' ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-sm'}`}>
                             <div className="flex justify-between items-start mb-4">
                                 <div>
                                     <div className="flex items-center gap-2 mb-1">
@@ -415,13 +545,18 @@ export default function TrainerDashboard({ user }: { user: User }) {
                                     </p>
                                     <p className="text-gray-700 dark:text-gray-300 mt-2 bg-gray-50 dark:bg-gray-700/50 p-2 rounded text-sm italic">"{f.description}"</p>
                                     
+                                    {/* Media Preview in Main List */}
+                                    <div className="mt-3">
+                                        {renderMediaPreview(f, false)}
+                                    </div>
+                                    
                                     {f.file_url && (
                                         <div className="flex gap-2 mt-3">
                                             <button 
                                                 onClick={() => handleDownloadFile(f)}
                                                 className="text-sm bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 hover:bg-blue-200 px-3 py-1 rounded flex items-center gap-2 transition-colors"
                                             >
-                                                <Download size={14} /> تحميل/عرض
+                                                <Download size={14} /> تحميل/عرض كامل
                                             </button>
                                         </div>
                                     )}

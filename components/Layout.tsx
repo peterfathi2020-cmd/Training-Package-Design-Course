@@ -40,17 +40,15 @@ export default function Layout({
     const [searchResults, setSearchResults] = useState<{users: User[], files: FileRecord[]}>({users: [], files: []});
     const [showResults, setShowResults] = useState(false);
     const searchRef = useRef<HTMLDivElement>(null);
+    
+    // Announcement State
     const [announcement, setAnnouncement] = useState('');
+    const [dismissedAnnouncement, setDismissedAnnouncement] = useState('');
 
     // Notifications State
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
     const [showNotifications, setShowNotifications] = useState(false);
     const notifRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        // Load Announcement
-        setAnnouncement(db.getAnnouncement());
-    }, []);
 
     // Handle click outside to close search and notifications
     useEffect(() => {
@@ -68,9 +66,14 @@ export default function Layout({
         };
     }, []);
 
-    // Fetch Notifications System
+    // Fetch Data & Notifications System
     useEffect(() => {
-        const fetchNotifs = () => {
+        const syncData = () => {
+            // 1. Sync Announcement
+            const currentAnnouncement = db.getAnnouncement();
+            setAnnouncement(currentAnnouncement);
+
+            // 2. Sync Notifications
             // Using v2 for string IDs
             const seenIds = JSON.parse(localStorage.getItem(`seen_notifs_v2_${user.id}`) || '[]');
             let notifList: NotificationItem[] = [];
@@ -83,8 +86,7 @@ export default function Layout({
                 allFiles.forEach(f => {
                     if (myTrainees.includes(f.user_id)) {
                         const uniqueId = `file_${f.id}`;
-                        // We consider it "new" if not seen. We can also check status 'pending' if we only want pending ones.
-                        // But let's show all unseen uploads.
+                        // We consider it "new" if not seen.
                         if (!seenIds.includes(uniqueId)) {
                             notifList.push({
                                 uniqueId,
@@ -151,8 +153,8 @@ export default function Layout({
             setNotifications(notifList);
         };
     
-        fetchNotifs();
-        const unsub = db.subscribe(fetchNotifs);
+        syncData();
+        const unsub = db.subscribe(syncData);
         return unsub;
     }, [user.id, user.role]);
     
@@ -234,6 +236,8 @@ export default function Layout({
         setSearchResults({ users: [], files: [] });
         setShowResults(false);
     };
+
+    const showBanner = announcement && announcement !== dismissedAnnouncement;
 
     return (
         <div className="min-h-screen bg-surface dark:bg-gray-900 flex flex-col transition-colors duration-200">
@@ -450,8 +454,15 @@ export default function Layout({
 
             {/* Main Content */}
             <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                {announcement && (
-                    <div className="mb-6 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 p-4 rounded-lg border border-red-200 dark:border-red-800 text-center animate-fadeIn shadow-sm">
+                {showBanner && (
+                    <div className="mb-6 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 p-4 rounded-lg border border-red-200 dark:border-red-800 text-center animate-fadeIn shadow-sm relative group">
+                        <button 
+                            onClick={() => setDismissedAnnouncement(announcement)}
+                            className="absolute top-2 left-2 p-1 text-red-400 hover:text-red-600 dark:text-red-400 dark:hover:text-red-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="إخفاء التنبيه"
+                        >
+                            <X size={16} />
+                        </button>
                         <div className="flex items-center justify-center gap-2 font-bold mb-1">
                             <Bell size={18} className="animate-pulse" />
                             <span>تنبيه هام:</span>

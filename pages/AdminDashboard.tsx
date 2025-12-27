@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
 import { User, FileRecord, Resource, Meeting, LoginLog } from '../types';
 import { Button, Input, Select, Card, Badge, ProgressBar } from '../components/ui';
-import { Users, FileText, Video, ShieldAlert, Download, UploadCloud, Mail, Lock, Phone, User as UserIcon, Link as LinkIcon, Type, Briefcase, BarChart, Library, BookOpen, AlignLeft, MessageCircle, ExternalLink, Calendar, Upload, Send, FileSpreadsheet, Megaphone, Activity, CheckCircle, Trash2, Edit, X, Cloud, Database, RefreshCw, Share2, Copy, Wifi, WifiOff, Globe, Sparkles } from 'lucide-react';
+import { Users, FileText, Video, ShieldAlert, Download, UploadCloud, Mail, Lock, Phone, User as UserIcon, Link as LinkIcon, Type, Briefcase, BarChart, Library, BookOpen, AlignLeft, MessageCircle, ExternalLink, Calendar, Upload, Send, FileSpreadsheet, Megaphone, Activity, CheckCircle, Trash2, Edit, X, Cloud, Database, RefreshCw, Share2, Copy, Wifi, WifiOff, Globe, Sparkles, Image as ImageIcon, PlayCircle, ChevronDown, ChevronUp, Maximize2, MessageSquare, TrendingUp, PieChart } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 
 export default function AdminDashboard() {
@@ -15,6 +15,9 @@ export default function AdminDashboard() {
   const [loginLogs, setLoginLogs] = useState<LoginLog[]>([]);
   const [isCloud, setIsCloud] = useState(db.isCloudConnected);
   
+  // Expanded Row State
+  const [expandedFileId, setExpandedFileId] = useState<number | null>(null);
+
   // Editing State
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editName, setEditName] = useState('');
@@ -315,7 +318,7 @@ export default function AdminDashboard() {
       }
   }
 
-  // Helper to format phone for WhatsApp (Simple Egyptian formatting assumption)
+  // Helper to format phone for WhatsApp
   const formatPhoneForWhatsapp = (phone: string) => {
       let p = phone.trim();
       if (p.startsWith('01')) {
@@ -348,14 +351,63 @@ export default function AdminDashboard() {
       return [];
   };
 
+  // Helper function to render file preview
+  const renderFilePreview = (f: FileRecord) => {
+    if (!f.file_url) return null;
+    const ext = f.filename.split('.').pop()?.toLowerCase() || '';
+    
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
+        return (
+            <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 group-hover:scale-105 transition-transform">
+                <img src={f.file_url} alt={f.filename} className="w-full h-full object-cover" />
+            </div>
+        );
+    }
+    if (['mp4', 'webm', 'ogg'].includes(ext)) {
+        return (
+            <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 bg-black">
+                <video src={f.file_url} className="w-full h-full object-cover opacity-60" />
+                <div className="absolute inset-0 flex items-center justify-center text-white">
+                    <PlayCircle size={20} />
+                </div>
+            </div>
+        );
+    }
+    return (
+        <div className="w-16 h-16 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-400">
+            <FileText size={24} />
+        </div>
+    );
+  };
+
+  // Helper to check file type
+  const isImage = (filename: string) => ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(filename.split('.').pop()?.toLowerCase() || '');
+  const isVideo = (filename: string) => ['mp4', 'webm', 'ogg', 'mov'].includes(filename.split('.').pop()?.toLowerCase() || '');
+
+  const toggleFileRow = (id: number) => {
+      setExpandedFileId(expandedFileId === id ? null : id);
+  };
+
   // Analytics Helpers
   const traineesCount = users.filter(u => u.role === 'trainee').length;
   const gradedFilesCount = allFiles.filter(f => f.status === 'graded').length;
-  const activeTrainers = trainers.filter(t => users.some(u => u.assigned_trainer_id === t.id));
   const traineesList = users.filter(u => u.role === 'trainee');
 
+  // Advanced Stats Calculation
+  const trainerStats = trainers.map(t => {
+      const myTrainees = users.filter(u => u.assigned_trainer_id === t.id).map(u => u.id);
+      const fileCount = allFiles.filter(f => myTrainees.includes(f.user_id)).length;
+      return {
+          name: t.name,
+          files: fileCount,
+          trainees: myTrainees.length
+      };
+  }).sort((a, b) => b.files - a.files); // Sort by most active
+
+  const maxFiles = Math.max(...trainerStats.map(t => t.files), 1);
+
   const tabs = [
-    { name: 'التحليلات والسحابة', icon: <Cloud size={18} /> },
+    { name: 'التحليلات والسحابة', icon: <TrendingUp size={18} /> },
     { name: 'مسئولي المجموعات', icon: <Users size={18} /> },
     { name: 'متابعة المتدربين', icon: <FileText size={18} /> },
     { name: 'المكتبة والمصادر', icon: <Library size={18} /> },
@@ -518,23 +570,33 @@ export default function AdminDashboard() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                 <Card title="نشاط مسئولي المجموعات">
-                    <div className="space-y-4 max-h-80 overflow-y-auto">
-                        {trainers.map(t => {
-                            const trainerTrainees = users.filter(u => u.assigned_trainer_id === t.id);
-                            return (
-                                <div key={t.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                                    <div className="flex items-center gap-3">
-                                        <div className="bg-blue-100 dark:bg-blue-900/50 p-2 rounded-full text-primary dark:text-blue-400"><UserIcon size={16}/></div>
-                                        <div>
-                                            <p className="font-bold text-navy dark:text-white">{t.name}</p>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400">{trainerTrainees.length} متدرب</p>
-                                        </div>
-                                    </div>
-                                    <div className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded">متصل بالنظام</div>
+                 <Card title="تحليل أداء المجموعات (Visual Analytics)" className="overflow-hidden">
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
+                            <span>المدرب</span>
+                            <span>عدد الملفات (النشاط)</span>
+                        </div>
+                        {trainerStats.map((stat, idx) => (
+                            <div key={idx} className="group">
+                                <div className="flex justify-between items-center mb-1 text-sm">
+                                    <span className="font-bold text-navy dark:text-gray-200">{stat.name}</span>
+                                    <span className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded text-gray-600 dark:text-gray-400">
+                                        {stat.files} ملف / {stat.trainees} طالب
+                                    </span>
                                 </div>
-                            )
-                        })}
+                                <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+                                    <div 
+                                        className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 group-hover:from-blue-400 group-hover:to-indigo-500 transition-all duration-500 rounded-full relative"
+                                        style={{ width: `${(stat.files / maxFiles) * 100}%` }}
+                                    >
+                                        {stat.files > 0 && (
+                                            <div className="absolute right-0 top-0 bottom-0 w-1 bg-white/30 animate-pulse"></div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                        {trainerStats.length === 0 && <p className="text-center text-gray-400 py-4">لا يوجد بيانات للتحليل</p>}
                     </div>
                 </Card>
 
@@ -751,7 +813,7 @@ export default function AdminDashboard() {
                     </div>
                 </Card>
 
-                <Card title="سجل الملفات المرفوعة سحابياً">
+                <Card title="سجل الملفات المرفوعة سحابياً" action={<div className="text-xs text-gray-400 flex items-center gap-1"><Maximize2 size={12}/> اضغط على الصف للتفاصيل</div>}>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-right">
                     <thead className="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400 border-b dark:border-gray-700">
@@ -764,35 +826,103 @@ export default function AdminDashboard() {
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                         {allFiles.map((f) => (
-                        <tr key={f.id} className="hover:bg-blue-50/30 dark:hover:bg-gray-700/30 transition-colors group">
-                            <td className="p-4 font-bold text-primary dark:text-blue-400">{f.user_name}</td>
-                            <td className="p-4">
-                                <div className="flex items-center gap-2 text-navy dark:text-gray-200">
-                                    <div className="bg-orange-100 dark:bg-orange-900/50 text-orange-600 dark:text-orange-400 p-1.5 rounded">
-                                        <FileText size={16} />
+                        <React.Fragment key={f.id}>
+                            <tr 
+                                onClick={() => toggleFileRow(f.id)} 
+                                className={`hover:bg-blue-50/30 dark:hover:bg-gray-700/30 transition-colors group cursor-pointer ${expandedFileId === f.id ? 'bg-blue-50/50 dark:bg-gray-700/50' : ''}`}
+                            >
+                                <td className="p-4 font-bold text-primary dark:text-blue-400">{f.user_name}</td>
+                                <td className="p-4">
+                                    <div className="flex items-start gap-3 text-navy dark:text-gray-200">
+                                        {renderFilePreview(f)}
+                                        <div className="flex flex-col justify-center">
+                                            <span className="font-bold flex items-center gap-2">
+                                                {f.filename}
+                                                {expandedFileId === f.id ? <ChevronUp size={14} className="text-gray-400"/> : <ChevronDown size={14} className="text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity"/>}
+                                            </span>
+                                            <span className="text-[10px] text-gray-400">{f.description}</span>
+                                        </div>
                                     </div>
-                                    <div className="flex flex-col">
-                                        <span>{f.filename}</span>
-                                        <span className="text-[10px] text-gray-400">{f.description}</span>
-                                    </div>
-                                </div>
-                                {f.file_url ? (
-                                    <a href={f.file_url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline mt-1 mr-8 flex items-center gap-1">
-                                        <ExternalLink size={12} /> فتح الرابط
-                                    </a>
-                                ) : (
-                                    <button className="text-xs text-blue-600 hover:underline mt-1 mr-8 flex items-center gap-1">
-                                        <Cloud size={12} /> تحميل من السحابة
-                                    </button>
-                                )}
-                            </td>
-                            <td className="p-4">
-                                <Badge color={f.status === 'graded' ? 'green' : 'yellow'}>
-                                    {f.status === 'graded' ? 'تم التصحيح' : 'قيد الانتظار'}
-                                </Badge>
-                            </td>
-                            <td className="p-4 font-bold text-navy dark:text-gray-200">{f.score ? `${f.score}/100` : '-'}</td>
-                        </tr>
+                                </td>
+                                <td className="p-4">
+                                    <Badge color={f.status === 'graded' ? 'green' : 'yellow'}>
+                                        {f.status === 'graded' ? 'تم التصحيح' : 'قيد الانتظار'}
+                                    </Badge>
+                                </td>
+                                <td className="p-4 font-bold text-navy dark:text-gray-200">{f.score ? `${f.score}/100` : '-'}</td>
+                            </tr>
+                            
+                            {/* Expanded Details Row */}
+                            {expandedFileId === f.id && (
+                                <tr className="bg-gray-50 dark:bg-gray-800/50 animate-fadeIn">
+                                    <td colSpan={4} className="p-4 border-b border-gray-100 dark:border-gray-700">
+                                        <div className="flex flex-col md:flex-row gap-6">
+                                            {/* Media Preview Section - Large */}
+                                            {f.file_url && (isImage(f.filename) || isVideo(f.filename)) && (
+                                                <div className="w-full md:w-1/3 flex-shrink-0">
+                                                    <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 bg-white dark:bg-black shadow-sm">
+                                                        {isImage(f.filename) ? (
+                                                            <img src={f.file_url} alt={f.filename} className="w-full h-auto object-contain max-h-64" />
+                                                        ) : (
+                                                            <video src={f.file_url} controls className="w-full h-auto max-h-64" />
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Details Section */}
+                                            <div className="flex-1 space-y-4">
+                                                <div>
+                                                    <h5 className="font-bold text-gray-800 dark:text-gray-200 mb-1">وصف الملف:</h5>
+                                                    <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed bg-white dark:bg-gray-700 p-3 rounded-lg border border-gray-100 dark:border-gray-600">
+                                                        {f.description}
+                                                    </p>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                                    <div>
+                                                        <span className="text-gray-500 dark:text-gray-400 block text-xs">تاريخ الرفع:</span>
+                                                        <span className="font-medium">{f.upload_date}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-gray-500 dark:text-gray-400 block text-xs">حالة الملف:</span>
+                                                        <span className={`font-bold ${f.status === 'graded' ? 'text-green-600' : 'text-yellow-600'}`}>
+                                                            {f.status === 'graded' ? 'تم التصحيح واعتماد الدرجة' : 'في انتظار مراجعة المدرب'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                {f.status === 'graded' && f.feedback && (
+                                                    <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-100 dark:border-green-800">
+                                                        <h5 className="font-bold text-green-800 dark:text-green-300 mb-1 flex items-center gap-2">
+                                                            <MessageSquare size={14}/> ملاحظات المدرب:
+                                                        </h5>
+                                                        <p className="text-sm text-gray-700 dark:text-gray-300">{f.feedback}</p>
+                                                        <div className="mt-2 text-right">
+                                                            <span className="text-xl font-bold text-green-600 dark:text-green-400">{f.score}/100</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {f.file_url && (
+                                                    <div className="pt-2">
+                                                        <a 
+                                                            href={f.file_url} 
+                                                            target="_blank" 
+                                                            rel="noreferrer"
+                                                            className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-bold transition-colors"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        >
+                                                            <Download size={16} /> تحميل الملف الأصلي
+                                                        </a>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            )}
+                        </React.Fragment>
                         ))}
                         {allFiles.length === 0 && (
                             <tr><td colSpan={4} className="p-8 text-center text-gray-400">لا توجد ملفات مرفوعة حتى الآن</td></tr>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
 import { User, FileRecord, Meeting, Resource } from '../types';
 import { Card, Button, Input, Badge, ProgressBar } from '../components/ui';
-import { Upload, Video, MessageCircle, FileText, Send, Star, MessageSquare, BookOpen, Download, Bell, X, Sparkles, Lightbulb, Image as ImageIcon, X as CloseIcon } from 'lucide-react';
+import { Upload, Video, MessageCircle, FileText, Send, Star, MessageSquare, BookOpen, Download, Bell, X, Sparkles, Lightbulb, Image as ImageIcon, X as CloseIcon, PlayCircle, Award, Trophy, Medal } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 
 export default function TraineeDashboard({ user }: { user: User }) {
@@ -145,8 +145,72 @@ export default function TraineeDashboard({ user }: { user: User }) {
       }
   };
 
+  // Helper to render media preview in list
+  const renderMediaPreview = (f: FileRecord) => {
+      if (!f.file_url) return null;
+      const ext = f.filename.split('.').pop()?.toLowerCase() || '';
+      
+      if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
+          return (
+              <div className="h-16 w-16 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 flex-shrink-0 bg-gray-100 dark:bg-gray-900">
+                  <img src={f.file_url} alt={f.filename} className="w-full h-full object-cover" />
+              </div>
+          );
+      }
+      if (['mp4', 'webm', 'ogg'].includes(ext)) {
+        return (
+            <div className="h-16 w-16 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 flex-shrink-0 bg-black relative">
+                <video src={f.file_url} className="w-full h-full object-cover opacity-70" />
+                <div className="absolute inset-0 flex items-center justify-center text-white">
+                    <PlayCircle size={20} />
+                </div>
+            </div>
+        );
+      }
+      return (
+        <div className={`p-3 rounded-full h-12 w-12 flex items-center justify-center bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400`}>
+            <FileText size={20} />
+        </div>
+      );
+  }
+
   // Calculate Progress (Simple Logic: each graded assignment adds 10%)
-  const progress = Math.min(100, myFiles.filter(f => f.status === 'graded').length * 20);
+  const completedAssignments = myFiles.filter(f => f.status === 'graded').length;
+  const progress = Math.min(100, completedAssignments * 20);
+
+  // Gamification Logic
+  const badges = [
+      {
+          id: 'first_upload',
+          title: 'البداية القوية',
+          icon: <RocketIcon />,
+          color: 'bg-blue-500',
+          condition: myFiles.length > 0
+      },
+      {
+          id: 'perfect_score',
+          title: 'المصمم المحترف',
+          icon: <StarIcon />,
+          color: 'bg-yellow-500',
+          condition: myFiles.some(f => f.score === 100)
+      },
+      {
+          id: 'active_student',
+          title: 'الطالب النشيط',
+          icon: <FireIcon />,
+          color: 'bg-orange-500',
+          condition: myFiles.length >= 3
+      },
+      {
+          id: 'master',
+          title: 'خبير الحقائب',
+          icon: <TrophyIcon />,
+          color: 'bg-purple-600',
+          condition: completedAssignments >= 5
+      }
+  ];
+
+  const earnedBadges = badges.filter(b => b.condition);
 
   return (
     <div className="space-y-6">
@@ -191,25 +255,43 @@ export default function TraineeDashboard({ user }: { user: User }) {
             )}
        </div>
 
-       {/* Progress Bar */}
-       <Card className="bg-gradient-to-r from-gray-900 to-gray-800 text-white border-0 shadow-xl">
-           <div className="flex items-center gap-4 mb-2">
-               <Star className="text-yellow-400 fill-yellow-400" />
-               <h3 className="font-bold text-lg text-white">مسار تقدمك التعليمي</h3>
-           </div>
-           {/* Custom lighter background for progress bar track inside this dark card */}
-           <div className="w-full">
-                <div className="w-full bg-gray-600/50 rounded-full h-2.5">
-                    <div 
-                        className="bg-blue-500 h-2.5 rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]" 
-                        style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
-                    ></div>
+       {/* Progress Bar & Badges */}
+       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Card className="md:col-span-2 bg-gradient-to-r from-gray-900 to-gray-800 text-white border-0 shadow-xl">
+                <div className="flex items-center gap-4 mb-2">
+                    <Star className="text-yellow-400 fill-yellow-400" />
+                    <h3 className="font-bold text-lg text-white">مسار تقدمك التعليمي</h3>
                 </div>
-            </div>
-           <p className="text-xs text-gray-400 mt-2">
-               يتم تحديث التقدم تلقائياً عند تصحيح واجباتك من قبل مسئول المجموعة. (أنجزت {myFiles.filter(f => f.status === 'graded').length} مهام)
-           </p>
-       </Card>
+                {/* Custom lighter background for progress bar track inside this dark card */}
+                <div className="w-full">
+                        <div className="w-full bg-gray-600/50 rounded-full h-2.5">
+                            <div 
+                                className="bg-blue-500 h-2.5 rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]" 
+                                style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+                            ></div>
+                        </div>
+                    </div>
+                <p className="text-xs text-gray-400 mt-2">
+                    يتم تحديث التقدم تلقائياً عند تصحيح واجباتك من قبل مسئول المجموعة. (أنجزت {completedAssignments} مهام)
+                </p>
+            </Card>
+
+            <Card title="لوحة الإنجازات" className="md:col-span-1" action={<Medal size={20} className="text-yellow-500"/>}>
+                <div className="flex flex-wrap gap-2 justify-center">
+                    {earnedBadges.map(badge => (
+                        <div key={badge.id} className="flex flex-col items-center p-2 animate-fadeIn" title={badge.title}>
+                            <div className={`p-2 rounded-full text-white shadow-md ${badge.color}`}>
+                                {badge.icon}
+                            </div>
+                            <span className="text-[10px] mt-1 font-bold text-gray-600 dark:text-gray-300">{badge.title}</span>
+                        </div>
+                    ))}
+                    {earnedBadges.length === 0 && (
+                        <p className="text-xs text-gray-400 text-center py-4">أكمل المهام لفتح الأوسمة!</p>
+                    )}
+                </div>
+            </Card>
+       </div>
 
        <div className="grid lg:grid-cols-3 gap-6">
            <div className="lg:col-span-1 space-y-6">
@@ -341,10 +423,10 @@ export default function TraineeDashboard({ user }: { user: User }) {
                         {myFiles.map(f => (
                             <div key={f.id} className="border border-gray-100 dark:border-gray-700 rounded-xl p-4 hover:shadow-sm transition-all bg-white dark:bg-gray-800">
                                 <div className="flex justify-between items-start mb-2">
-                                    <div className="flex items-center gap-2">
-                                        <div className={`p-2 rounded-full ${f.status === 'graded' ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'}`}>
-                                            {f.filename.match(/\.(jpg|jpeg|png|gif)$/i) ? <ImageIcon size={20} /> : <FileText size={20} />}
-                                        </div>
+                                    <div className="flex items-start gap-3">
+                                        {/* Visual Preview for Trainee History */}
+                                        {renderMediaPreview(f)}
+
                                         <div>
                                             <h4 className="font-bold text-gray-800 dark:text-gray-200">{f.filename}</h4>
                                             <p className="text-xs text-gray-500 dark:text-gray-400">{f.upload_date}</p>
@@ -398,3 +480,20 @@ export default function TraineeDashboard({ user }: { user: User }) {
     </div>
   );
 }
+
+// Icon Components for Badges
+const RocketIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>
+);
+
+const StarIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
+);
+
+const FireIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-2.312-4.285-1.5-6C8.5 3 14.5 5 13 9c1.5-2 2.5-2 4-2 0 2-1.5 3-2 5 .5 2.5 2.5 3 2 6a4 4 0 0 1-8 0"/></svg>
+);
+
+const TrophyIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+);
