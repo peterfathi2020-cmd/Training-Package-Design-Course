@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
 import { User, FileRecord, Resource, Meeting, LoginLog } from '../types';
 import { Button, Input, Select, Card, Badge } from '../components/ui';
-import { Users, FileText, Video, ShieldAlert, Download, UploadCloud, Mail, Lock, Phone, User as UserIcon, Link as LinkIcon, Type, Briefcase, BarChart, Library, BookOpen, AlignLeft, MessageCircle, ExternalLink, Calendar, Upload, Send, FileSpreadsheet, Megaphone, Activity, CheckCircle, Trash2, Edit, X, Cloud, Database, RefreshCw, Share2, Copy, Wifi, WifiOff, Globe } from 'lucide-react';
+import { Users, FileText, Video, ShieldAlert, Download, UploadCloud, Mail, Lock, Phone, User as UserIcon, Link as LinkIcon, Type, Briefcase, BarChart, Library, BookOpen, AlignLeft, MessageCircle, ExternalLink, Calendar, Upload, Send, FileSpreadsheet, Megaphone, Activity, CheckCircle, Trash2, Edit, X, Cloud, Database, RefreshCw, Share2, Copy, Wifi, WifiOff, Globe, Sparkles } from 'lucide-react';
+import { GoogleGenAI } from "@google/genai";
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState(0);
@@ -49,6 +50,7 @@ export default function AdminDashboard() {
   const [rDesc, setRDesc] = useState('');
   const [rLink, setRLink] = useState('');
   const [rType, setRType] = useState<'pdf' | 'video' | 'link'>('pdf');
+  const [isAiLoading, setIsAiLoading] = useState(false);
 
   // Announcement
   const [announcementText, setAnnouncementText] = useState('');
@@ -197,6 +199,36 @@ export default function AdminDashboard() {
       alert('تمت إضافة المصدر للمكتبة');
       setRTitle(''); setRDesc(''); setRLink(''); setRType('pdf');
   }
+
+  const handleAiResourceDesc = async () => {
+      if (!rTitle) {
+          alert("يرجى كتابة العنوان أولاً");
+          return;
+      }
+      setIsAiLoading(true);
+      try {
+          const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+          const prompt = `
+            Write a short, engaging description (in Arabic, max 20 words) for a bag design learning resource.
+            Title: ${rTitle}
+            Type: ${rType}
+            
+            The description should encourage trainees to view the content.
+          `;
+          const response = await ai.models.generateContent({
+              model: 'gemini-3-flash-preview',
+              contents: prompt
+          });
+          if (response.text) {
+              setRDesc(response.text.trim());
+          }
+      } catch (e) {
+          console.error(e);
+          alert("حدث خطأ في الـ AI");
+      } finally {
+          setIsAiLoading(false);
+      }
+  };
 
   const handleUpdateAnnouncement = () => {
       db.setAnnouncement(announcementText);
@@ -772,8 +804,20 @@ export default function AdminDashboard() {
                            <option value="link">رابط موقع</option>
                        </select>
                    </div>
+                    
+                    <div className="relative">
+                        <Input icon={AlignLeft} label="وصف مختصر" value={rDesc} onChange={(e) => setRDesc(e.target.value)} placeholder="شرح عن محتوى المصدر..." />
+                        <button 
+                            type="button" 
+                            onClick={handleAiResourceDesc} 
+                            disabled={isAiLoading || !rTitle}
+                            className="absolute left-2 top-8 p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                            title="توليد وصف تلقائي بالذكاء الاصطناعي"
+                        >
+                            <Sparkles size={18} className={isAiLoading ? "animate-spin" : ""} />
+                        </button>
+                    </div>
 
-                    <Input icon={AlignLeft} label="وصف مختصر" value={rDesc} onChange={(e) => setRDesc(e.target.value)} placeholder="شرح عن محتوى المصدر..." />
                     <Input icon={LinkIcon} label="رابط المصدر" value={rLink} onChange={(e) => setRLink(e.target.value)} required placeholder="https://..." />
                     
                     <Button type="submit" className="w-full">

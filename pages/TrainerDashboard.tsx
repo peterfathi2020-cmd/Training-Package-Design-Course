@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
 import { User, FileRecord, Meeting, Resource } from '../types';
 import { Card, Badge, Button, Input, Select } from '../components/ui';
-import { Users, File, Video, MessageSquare, CheckCircle, Upload, Link as LinkIcon, BookOpen, Library, AlignLeft, Send, Download, Calendar, Save, Settings, Lock, Phone, Trash2, FileText, Cloud, FolderOpen } from 'lucide-react';
+import { Users, File, Video, MessageSquare, CheckCircle, Upload, Link as LinkIcon, BookOpen, Library, AlignLeft, Send, Download, Calendar, Save, Settings, Lock, Phone, Trash2, FileText, Cloud, FolderOpen, Sparkles, Bell, X } from 'lucide-react';
+import { GoogleGenAI } from "@google/genai";
 
 export default function TrainerDashboard({ user }: { user: User }) {
   const [trainees, setTrainees] = useState<User[]>([]);
@@ -10,10 +11,14 @@ export default function TrainerDashboard({ user }: { user: User }) {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [resources, setResources] = useState<Resource[]>([]);
 
+  // Notification State
+  const [notifications, setNotifications] = useState<FileRecord[]>([]);
+
   // Grading State
   const [editingFile, setEditingFile] = useState<number | null>(null);
   const [score, setScore] = useState('');
   const [feedback, setFeedback] = useState('');
+  const [isAiLoading, setIsAiLoading] = useState(false);
 
   // Resource State
   const [rTitle, setRTitle] = useState('');
@@ -71,6 +76,16 @@ export default function TrainerDashboard({ user }: { user: User }) {
     const relevantFiles = allFiles.filter(f => myTraineesIds.includes(f.user_id));
     setFiles(relevantFiles);
 
+    // Notification Logic: Detect new uploads not seen by trainer yet
+    const seenIds = JSON.parse(localStorage.getItem(`seen_uploads_trainer_${user.id}`) || '[]');
+    // Filter files that are NOT graded yet (optional preference) or just strictly "not seen"
+    // Using ID sort for "newest" as date string is localized
+    const newUploads = relevantFiles
+        .filter(f => !seenIds.includes(f.id))
+        .sort((a, b) => b.id - a.id);
+    
+    setNotifications(newUploads);
+
     // Meetings
     const allMeetings = db.getMeetings();
     const relevantMeetings = allMeetings
@@ -90,19 +105,80 @@ export default function TrainerDashboard({ user }: { user: User }) {
     setResources(relevantResources);
   };
 
+  const dismissNotification = (fileId: number) => {
+      const seenIds = JSON.parse(localStorage.getItem(`seen_uploads_trainer_${user.id}`) || '[]');
+      if (!seenIds.includes(fileId)) {
+          const updatedSeenIds = [...seenIds, fileId];
+          localStorage.setItem(`seen_uploads_trainer_${user.id}`, JSON.stringify(updatedSeenIds));
+      }
+      setNotifications(prev => prev.filter(n => n.id !== fileId));
+  };
+
+  const markAllAsSeen = () => {
+      const seenIds = JSON.parse(localStorage.getItem(`seen_uploads_trainer_${user.id}`) || '[]');
+      const currentNotifIds = notifications.map(n => n.id);
+      const updated = [...new Set([...seenIds, ...currentNotifIds])];
+      localStorage.setItem(`seen_uploads_trainer_${user.id}`, JSON.stringify(updated));
+      setNotifications([]);
+  };
+
   const handleGrade = (fileId: number) => {
       db.gradeFile(fileId, Number(score), feedback);
+      
+      // Auto-mark as seen when graded
+      dismissNotification(fileId);
+
       setEditingFile(null);
       setScore('');
       setFeedback('');
-      // refresh handled by db subscription now, but we can call it manually for immediate feedback UI
   }
 
   const startGrading = (file: FileRecord) => {
       setEditingFile(file.id);
       setScore(file.score?.toString() || '');
       setFeedback(file.feedback || '');
+      
+      // Mark as seen when opening grading interface
+      dismissNotification(file.id);
   }
+
+  const handleAiGrade = async (file: FileRecord) => {
+      if (!process.env.API_KEY) {
+          alert("مفتاح API غير متوفر");
+          return;
+      }
+      setIsAiLoading(true);
+      try {
+          const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+          const prompt = `
+            Act as a supportive but professional design trainer.
+            A trainee submitted a file named "${file.filename}" with the description: "${file.description}".
+            
+            Based on this context:
+            1. Write a constructive feedback message in Arabic (approx 20-30 words) focusing on bag design quality and creativity.
+            2. Suggest a score from 0 to 100.
+            
+            Return strictly JSON format: { "feedback": string, "score": number }
+          `;
+          
+          const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: prompt,
+            config: { responseMimeType: 'application/json' }
+          });
+          
+          if (response.text) {
+              const result = JSON.parse(response.text);
+              setScore(String(result.score));
+              setFeedback(result.feedback);
+          }
+      } catch (e) {
+          console.error(e);
+          alert("حدث خطأ أثناء الاتصال بالذكاء الاصطناعي");
+      } finally {
+          setIsAiLoading(false);
+      }
+  };
 
   const handleAddResource = (e: React.FormEvent) => {
       e.preventDefault();
@@ -186,6 +262,55 @@ export default function TrainerDashboard({ user }: { user: User }) {
 
   return (
     <div className="space-y-6">
+      
+      {/* Notifications Section */}
+      {notifications.length > 0 && (
+        <div className="space-y-3 animate-pulse">
+            <div className="flex justify-between items-center mb-1">
+                <h4 className="font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                    <Bell size={18} className="text-orange-500" />
+                    تنبيهات الملفات الجديدة
+                </h4>
+                <button 
+                    onClick={markAllAsSeen}
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                    تحديد الكل كمقروء
+                </button>
+            </div>
+            {notifications.map(n => (
+                <div key={n.id} className="bg-orange-50 dark:bg-orange-900/20 border-l-4 border-orange-400 p-4 rounded-r-xl shadow-md flex justify-between items-start transition-all transform hover:scale-[1.01]">
+                    <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                            <span className="font-bold text-gray-800 dark:text-gray-100">{n.user_name}</span>
+                            <span className="text-sm text-gray-500">قام برفع ملف جديد</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                            <File size={14} />
+                            <span className="font-medium">{n.filename}</span>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">{n.upload_date}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button 
+                            onClick={() => startGrading(n)}
+                            className="bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 px-3 py-1.5 rounded-lg text-xs font-bold border border-orange-200 dark:border-orange-800 hover:bg-orange-50 dark:hover:bg-orange-900/30"
+                        >
+                            تصحيح الآن
+                        </button>
+                        <button 
+                            onClick={() => dismissNotification(n.id)}
+                            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-colors"
+                            title="إخفاء التنبيه"
+                        >
+                            <X size={18} />
+                        </button>
+                    </div>
+                </div>
+            ))}
+        </div>
+      )}
+
       {/* Meetings Alert */}
       {meetings.length > 0 && (
           <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-600 dark:border-blue-500 p-4 rounded shadow-sm flex justify-between items-center">
@@ -373,6 +498,14 @@ export default function TrainerDashboard({ user }: { user: User }) {
 
                             {editingFile === f.id && (
                                 <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 animate-fadeIn">
+                                    <button 
+                                        onClick={() => handleAiGrade(f)}
+                                        disabled={isAiLoading}
+                                        className="w-full mb-4 flex items-center justify-center gap-2 bg-gradient-to-r from-purple-100 to-purple-50 dark:from-purple-900/40 dark:to-purple-900/20 text-purple-700 dark:text-purple-300 p-2 rounded-lg text-sm font-bold border border-purple-200 dark:border-purple-800 hover:from-purple-200 hover:to-purple-100 transition-all"
+                                    >
+                                        <Sparkles size={16} className={isAiLoading ? 'animate-spin' : ''} />
+                                        {isAiLoading ? 'جاري تحليل الملف بالذكاء الاصطناعي...' : 'اقتراح تقييم تلقائي (Gemini AI)'}
+                                    </button>
                                     <div className="grid grid-cols-4 gap-4 mb-3">
                                         <div className="col-span-1">
                                             <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">الدرجة</label>

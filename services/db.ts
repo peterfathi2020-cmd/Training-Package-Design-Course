@@ -1,6 +1,19 @@
 import { User, FileRecord, Meeting, UserRole, Resource, AttendanceRecord, LoginLog, FirebaseConfig } from '../types';
 import { initializeApp, FirebaseApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, Firestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc, query, where, getDocs, enableIndexedDbPersistence } from 'firebase/firestore';
+import { 
+    getFirestore, 
+    Firestore, 
+    collection, 
+    onSnapshot, 
+    addDoc, 
+    updateDoc, 
+    deleteDoc, 
+    doc, 
+    setDoc, 
+    query, 
+    where, 
+    getDocs
+} from 'firebase/firestore';
 import { getStorage, FirebaseStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
 
 const STORAGE_KEYS = {
@@ -16,13 +29,13 @@ const STORAGE_KEYS = {
 
 // Hardcoded Config (Fixed Online Connection)
 const HARDCODED_FIREBASE_CONFIG: FirebaseConfig = {
-  apiKey: "AIzaSyBt5pBiY3TWVJzj8FMz7l7m9RMIbmhOxpo",
-  authDomain: "training-app-cloud.firebaseapp.com",
-  projectId: "training-app-cloud",
-  storageBucket: "training-app-cloud.firebasestorage.app",
-  messagingSenderId: "93857700118",
-  appId: "1:93857700118:web:131af4b7b347a4a5bd9837",
-  measurementId: "G-60ZST0YJ6P"
+  apiKey: "AIzaSyBiWVgBKuRdCBI7QYaMG2c1YnJKZ3Cx9QY",
+  authDomain: "training-app-cloud2.firebaseapp.com",
+  projectId: "training-app-cloud2",
+  storageBucket: "training-app-cloud2.firebasestorage.app",
+  messagingSenderId: "643085445778",
+  appId: "1:643085445778:web:bfca0990ec5d907420144b",
+  measurementId: "G-LCR2L8KZZY"
 };
 
 // Seed Data
@@ -88,26 +101,19 @@ class DatabaseService {
               this.firebaseApp = getApp();
           }
 
-          this.firestore = getFirestore(this.firebaseApp);
-          this.storage = getStorage(this.firebaseApp);
-
-          // Enable Offline Persistence
-          try {
-              if (this.firestore) {
-                  await enableIndexedDbPersistence(this.firestore);
-                  console.log("📦 Offline persistence enabled");
-              }
-          } catch (err: any) {
-              if (err.code == 'failed-precondition') {
-                  console.warn('Persistence failed: Multiple tabs open.');
-              } else if (err.code == 'unimplemented') {
-                  console.warn('Persistence failed: Browser not supported.');
-              }
+          if (this.firebaseApp) {
+              // Fix: Use standard getFirestore for maximum compatibility.
+              // Avoids 'Service firestore is not available' error caused by initializeFirestore in some bundles.
+              this.firestore = getFirestore(this.firebaseApp);
+              this.storage = getStorage(this.firebaseApp);
+              this.isCloudConnected = true;
+              console.log("✅ 🔥 Firebase Core Services Initialized!");
+              
+              this.setupRealtimeListeners();
+              console.log("✅ 🔥 Firebase Realtime Sync Connected!");
+          } else {
+              throw new Error("Failed to resolve Firebase App instance.");
           }
-          
-          this.isCloudConnected = true;
-          this.setupRealtimeListeners();
-          console.log("✅ 🔥 Firebase Connected Successfully!");
       } catch (e) {
           console.error("❌ Firebase Connection Failed:", e);
           // Only fallback if connection completely fails
@@ -214,6 +220,7 @@ class DatabaseService {
 
       if (onProgress) {
         return new Promise((resolve, reject) => {
+            if (!this.storage) return reject(new Error("Storage unavailable"));
             const uploadTask = uploadBytesResumable(storageRef, file, metadata);
             
             uploadTask.on('state_changed', 

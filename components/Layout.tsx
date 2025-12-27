@@ -121,6 +121,7 @@ export default function Layout({
                             src="https://cdn-icons-png.flaticon.com/512/3406/3406828.png" 
                             alt="Logo" 
                             className="w-14 h-14 animate-pulse"
+                            loading="lazy"
                         />
                         <div>
                             <h1 className="text-xl font-extrabold text-navy dark:text-white leading-tight hidden sm:block">تدريب مصممي الحقائب</h1>

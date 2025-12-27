@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
 import { User, FileRecord, Meeting, Resource } from '../types';
 import { Card, Button, Input, Badge, ProgressBar } from '../components/ui';
-import { Upload, Video, MessageCircle, FileText, Send, Star, MessageSquare, BookOpen, Download, Bell, X } from 'lucide-react';
+import { Upload, Video, MessageCircle, FileText, Send, Star, MessageSquare, BookOpen, Download, Bell, X, Sparkles, Lightbulb } from 'lucide-react';
+import { GoogleGenAI } from "@google/genai";
 
 export default function TraineeDashboard({ user }: { user: User }) {
   const [trainer, setTrainer] = useState<User | undefined>(undefined);
@@ -15,6 +16,10 @@ export default function TraineeDashboard({ user }: { user: User }) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  // AI State
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiIdea, setAiIdea] = useState('');
 
   // Notifications
   const [notifications, setNotifications] = useState<FileRecord[]>([]);
@@ -109,6 +114,30 @@ export default function TraineeDashboard({ user }: { user: User }) {
           localStorage.setItem(`seen_notifications_${user.id}`, JSON.stringify(updatedSeenIds));
       }
       setNotifications(prev => prev.filter(n => n.id !== fileId));
+  };
+
+  const handleAiInspire = async () => {
+      setIsAiLoading(true);
+      try {
+          const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+          const prompt = `
+            Give me a creative, unique bag design challenge idea (in Arabic) for a design student.
+            Keep it short (1-2 sentences).
+            Example: "Design a waterproof backpack for urban cyclists using recycled materials."
+          `;
+          const response = await ai.models.generateContent({
+              model: 'gemini-3-flash-preview',
+              contents: prompt
+          });
+          if (response.text) {
+              setAiIdea(response.text);
+          }
+      } catch (e) {
+          console.error(e);
+          alert("حدث خطأ في الـ AI");
+      } finally {
+          setIsAiLoading(false);
+      }
   };
 
   // Calculate Progress (Simple Logic: each graded assignment adds 10%)
@@ -218,6 +247,24 @@ export default function TraineeDashboard({ user }: { user: User }) {
 
        <div className="grid lg:grid-cols-3 gap-6">
            <div className="lg:col-span-1 space-y-6">
+               <Card title="هل تحتاج إلى إلهام؟" className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border-indigo-100 dark:border-indigo-800">
+                    <div className="text-center">
+                        <Lightbulb size={32} className="mx-auto text-yellow-500 mb-2" />
+                        <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                            استخدم الذكاء الاصطناعي للحصول على فكرة مشروع تصميم جديدة ومبتكرة.
+                        </p>
+                        <Button onClick={handleAiInspire} disabled={isAiLoading} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">
+                            <Sparkles size={16} className={isAiLoading ? 'animate-spin' : ''} />
+                            {isAiLoading ? 'جاري التوليد...' : '✨ اقترح فكرة تصميم'}
+                        </Button>
+                        {aiIdea && (
+                            <div className="mt-4 p-3 bg-white dark:bg-gray-800 rounded-lg text-sm text-gray-800 dark:text-gray-200 border border-indigo-200 dark:border-indigo-800 animate-fadeIn text-right">
+                                "{aiIdea}"
+                            </div>
+                        )}
+                    </div>
+               </Card>
+
                <Card title="إرسال واجب / ملف">
                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 bg-gray-50 dark:bg-gray-700/50 p-2 rounded">
                        الملفات التي تقوم برفعها هنا تظهر فوراً لمسئول مجموعتك ({trainer ? trainer.name : '...'}) وللإدارة.

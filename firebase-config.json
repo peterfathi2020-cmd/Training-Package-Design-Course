@@ -1,9 +1,9 @@
 {
-  "apiKey": "AIzaSyBt5pBiY3TWVJzj8FMz7l7m9RMIbmhOxpo",
-  "authDomain": "training-app-cloud.firebaseapp.com",
-  "projectId": "training-app-cloud",
-  "storageBucket": "training-app-cloud.firebasestorage.app",
-  "messagingSenderId": "93857700118",
-  "appId": "1:93857700118:web:131af4b7b347a4a5bd9837",
-  "measurementId": "G-60ZST0YJ6P"
+  "apiKey": "AIzaSyBiWVgBKuRdCBI7QYaMG2c1YnJKZ3Cx9QY",
+  "authDomain": "training-app-cloud2.firebaseapp.com",
+  "projectId": "training-app-cloud2",
+  "storageBucket": "training-app-cloud2.firebasestorage.app",
+  "messagingSenderId": "643085445778",
+  "appId": "1:643085445778:web:bfca0990ec5d907420144b",
+  "measurementId": "G-LCR2L8KZZY"
 }
