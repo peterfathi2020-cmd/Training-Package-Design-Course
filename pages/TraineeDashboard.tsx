@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
 import { User, FileRecord, Meeting, Resource } from '../types';
 import { Card, Button, Input, Badge, ProgressBar } from '../components/ui';
-import { Upload, Video, MessageCircle, FileText, Send, Star, MessageSquare, BookOpen, Download, Bell, X, Sparkles, Lightbulb } from 'lucide-react';
+import { Upload, Video, MessageCircle, FileText, Send, Star, MessageSquare, BookOpen, Download, Bell, X, Sparkles, Lightbulb, Image as ImageIcon, X as CloseIcon } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 
 export default function TraineeDashboard({ user }: { user: User }) {
@@ -16,13 +16,11 @@ export default function TraineeDashboard({ user }: { user: User }) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   // AI State
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiIdea, setAiIdea] = useState('');
-
-  // Notifications
-  const [notifications, setNotifications] = useState<FileRecord[]>([]);
 
   useEffect(() => {
     if (user.assigned_trainer_id) {
@@ -41,11 +39,6 @@ export default function TraineeDashboard({ user }: { user: User }) {
     const all = db.getFiles();
     const my = all.filter(f => f.user_id === user.id);
     setMyFiles(my);
-
-    // Notification Logic: Check for graded files not yet seen
-    const seenIds = JSON.parse(localStorage.getItem(`seen_notifications_${user.id}`) || '[]');
-    const newGradedFiles = my.filter(f => f.status === 'graded' && !seenIds.includes(f.id));
-    setNotifications(newGradedFiles);
 
     // Meetings
     const allMeetings = db.getMeetings();
@@ -76,28 +69,49 @@ export default function TraineeDashboard({ user }: { user: User }) {
     setResources(relevantResources);
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          setSelectedFile(file);
+          // Create preview for images
+          if (file.type.startsWith('image/')) {
+              const url = URL.createObjectURL(file);
+              setPreviewUrl(url);
+          } else if (file.type.startsWith('video/')) {
+              const url = URL.createObjectURL(file);
+              setPreviewUrl(url);
+          } else {
+              setPreviewUrl(null);
+          }
+      }
+  };
+
+  const clearFile = () => {
+      setSelectedFile(null);
+      setPreviewUrl(null);
+  };
+
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedFile) return;
+
+    if (!db.isCloudConnected) {
+        alert("عذراً، يجب أن تكون متصلاً بالإنترنت وقاعدة البيانات السحابية لرفع الملفات.");
+        return;
+    }
 
     setIsUploading(true);
     setUploadProgress(0);
 
     try {
-        let fileUrl = undefined;
-        if (db.isCloudConnected) {
-            fileUrl = await db.uploadFileToCloud(selectedFile, 'trainee_uploads', (progress) => {
-                setUploadProgress(progress);
-            });
-        }
-
-        // Simulate a small progress for local upload
-        if (!db.isCloudConnected) setUploadProgress(100);
+        const fileUrl = await db.uploadFileToCloud(selectedFile, 'trainee_uploads', (progress) => {
+            setUploadProgress(progress);
+        });
 
         await db.addFile(user.id, selectedFile.name, desc, fileUrl);
-        alert(`تم إرسال الملف "${selectedFile.name}" بنجاح إلى مسئول المجموعة ${trainer ? trainer.name : ''}`);
+        alert(`تم إرسال الملف "${selectedFile.name}" بنجاح إلى مسئول المجموعة.`);
         setDesc('');
-        setSelectedFile(null);
+        clearFile();
         setUploadProgress(0);
     } catch (error: any) {
         alert("فشل رفع الملف: " + error.message);
@@ -105,15 +119,6 @@ export default function TraineeDashboard({ user }: { user: User }) {
     } finally {
         setIsUploading(false);
     }
-  };
-
-  const dismissNotification = (fileId: number) => {
-      const seenIds = JSON.parse(localStorage.getItem(`seen_notifications_${user.id}`) || '[]');
-      if (!seenIds.includes(fileId)) {
-          const updatedSeenIds = [...seenIds, fileId];
-          localStorage.setItem(`seen_notifications_${user.id}`, JSON.stringify(updatedSeenIds));
-      }
-      setNotifications(prev => prev.filter(n => n.id !== fileId));
   };
 
   const handleAiInspire = async () => {
@@ -146,45 +151,6 @@ export default function TraineeDashboard({ user }: { user: User }) {
   return (
     <div className="space-y-6">
        
-       {/* Notifications Section */}
-       {notifications.length > 0 && (
-            <div className="space-y-3 animate-pulse">
-                {notifications.map(n => (
-                    <div key={n.id} className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 p-4 rounded-r-xl shadow-md flex justify-between items-start transition-all transform hover:scale-[1.01]">
-                        <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                                <div className="bg-yellow-100 dark:bg-yellow-900/40 p-2 rounded-full text-yellow-600 dark:text-yellow-400">
-                                    <Bell size={20} />
-                                </div>
-                                <h4 className="font-bold text-gray-800 dark:text-gray-100 text-lg">تم تصحيح واجب: {n.filename}</h4>
-                            </div>
-                            <div className="mr-10">
-                                <p className="text-gray-700 dark:text-gray-300 mb-2 font-medium">
-                                    حصلت على درجة: <span className={`font-bold text-lg ${n.score && n.score >= 50 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{n.score}/100</span>
-                                </p>
-                                {n.feedback && (
-                                    <div className="bg-white dark:bg-gray-800 p-3 rounded-lg border border-yellow-100 dark:border-yellow-900/30 text-gray-700 dark:text-gray-300 text-sm">
-                                        <div className="flex items-center gap-2 mb-1 text-yellow-600 dark:text-yellow-500 font-bold">
-                                            <MessageSquare size={14} />
-                                            <span>ملاحظات:</span>
-                                        </div>
-                                        {n.feedback}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                        <button 
-                            onClick={() => dismissNotification(n.id)}
-                            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-colors"
-                            title="إخفاء التنبيه"
-                        >
-                            <X size={20} />
-                        </button>
-                    </div>
-                ))}
-            </div>
-       )}
-
        {/* Info & Progress Section */}
        <div className="grid md:grid-cols-2 gap-4">
            {trainer && (
@@ -271,19 +237,47 @@ export default function TraineeDashboard({ user }: { user: User }) {
                    </p>
                    <form onSubmit={handleUpload} className="space-y-4">
                        <div className="border-2 border-dashed border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-900/20 rounded-lg p-6 text-center hover:bg-blue-50 dark:hover:bg-blue-900/30 transition cursor-pointer relative group">
-                           <input 
-                            type="file" 
-                            id="file-upload"
-                            className="hidden" 
-                            onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-                           />
-                           <label htmlFor="file-upload" className="cursor-pointer block w-full h-full">
-                               <Upload className="mx-auto text-blue-400 mb-2 group-hover:scale-110 transition-transform" size={32} />
-                               <span className="text-sm text-blue-800 dark:text-blue-300 font-medium">
-                                   {selectedFile ? selectedFile.name : 'اضغط لاختيار ملف'}
-                               </span>
-                           </label>
+                           {!selectedFile ? (
+                               <>
+                                   <input 
+                                    type="file" 
+                                    id="file-upload"
+                                    className="hidden" 
+                                    accept="image/*,video/*,application/pdf,.doc,.docx"
+                                    onChange={handleFileSelect}
+                                   />
+                                   <label htmlFor="file-upload" className="cursor-pointer block w-full h-full">
+                                       <Upload className="mx-auto text-blue-400 mb-2 group-hover:scale-110 transition-transform" size={32} />
+                                       <span className="text-sm text-blue-800 dark:text-blue-300 font-medium">
+                                           اضغط لاختيار صورة / فيديو / ملف
+                                       </span>
+                                   </label>
+                               </>
+                           ) : (
+                               <div className="relative">
+                                   <button 
+                                    type="button" 
+                                    onClick={clearFile}
+                                    className="absolute -top-4 -right-4 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600 transition"
+                                   >
+                                       <CloseIcon size={14} />
+                                   </button>
+                                   
+                                   {previewUrl && selectedFile.type.startsWith('image/') && (
+                                       <img src={previewUrl} alt="Preview" className="w-full h-32 object-cover rounded-lg mb-2" />
+                                   )}
+                                   {previewUrl && selectedFile.type.startsWith('video/') && (
+                                       <video src={previewUrl} className="w-full h-32 object-cover rounded-lg mb-2" controls />
+                                   )}
+                                   
+                                   <div className="flex items-center justify-center gap-2 text-blue-600 dark:text-blue-400 font-bold">
+                                       <FileText size={16} />
+                                       <span className="truncate max-w-[200px]">{selectedFile.name}</span>
+                                   </div>
+                               </div>
+                           )}
                        </div>
+                       
                        <Input 
                         label="وصف الملف" 
                         value={desc} 
@@ -294,7 +288,7 @@ export default function TraineeDashboard({ user }: { user: User }) {
                        
                        {isUploading && (
                          <div className="animate-fadeIn">
-                             <ProgressBar progress={uploadProgress} label={db.isCloudConnected ? "جاري الرفع للسحابة..." : "جاري المعالجة..."} />
+                             <ProgressBar progress={uploadProgress} label="جاري الرفع إلى السحابة..." />
                          </div>
                        )}
 
@@ -349,7 +343,7 @@ export default function TraineeDashboard({ user }: { user: User }) {
                                 <div className="flex justify-between items-start mb-2">
                                     <div className="flex items-center gap-2">
                                         <div className={`p-2 rounded-full ${f.status === 'graded' ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'}`}>
-                                            <FileText size={20} />
+                                            {f.filename.match(/\.(jpg|jpeg|png|gif)$/i) ? <ImageIcon size={20} /> : <FileText size={20} />}
                                         </div>
                                         <div>
                                             <h4 className="font-bold text-gray-800 dark:text-gray-200">{f.filename}</h4>
@@ -364,6 +358,19 @@ export default function TraineeDashboard({ user }: { user: User }) {
                                 <p className="text-sm text-gray-600 dark:text-gray-300 mb-3 bg-gray-50 dark:bg-gray-700/50 p-2 rounded">
                                     {f.description}
                                 </p>
+                                
+                                {f.file_url && (
+                                    <div className="mb-3">
+                                         <a 
+                                            href={f.file_url} 
+                                            target="_blank" 
+                                            rel="noreferrer"
+                                            className="inline-flex items-center gap-2 text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline"
+                                         >
+                                             <Download size={14} /> عرض / تحميل الملف
+                                         </a>
+                                    </div>
+                                )}
 
                                 {f.status === 'graded' && f.feedback && (
                                     <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 animate-fadeIn">

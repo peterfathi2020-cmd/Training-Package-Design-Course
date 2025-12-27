@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
 import { User, FileRecord, Meeting, Resource } from '../types';
-import { Card, Badge, Button, Input, Select } from '../components/ui';
-import { Users, File, Video, MessageSquare, CheckCircle, Upload, Link as LinkIcon, BookOpen, Library, AlignLeft, Send, Download, Calendar, Save, Settings, Lock, Phone, Trash2, FileText, Cloud, FolderOpen, Sparkles, Bell, X } from 'lucide-react';
+import { Card, Badge, Button, Input, Select, ProgressBar } from '../components/ui';
+import { Users, File, Video, MessageSquare, CheckCircle, Upload, Link as LinkIcon, BookOpen, Library, AlignLeft, Send, Download, Calendar, Save, Settings, Lock, Phone, Trash2, FileText, Cloud, FolderOpen, Sparkles, X, Image as ImageIcon, PlayCircle } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 
 export default function TrainerDashboard({ user }: { user: User }) {
@@ -10,9 +10,6 @@ export default function TrainerDashboard({ user }: { user: User }) {
   const [files, setFiles] = useState<FileRecord[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [resources, setResources] = useState<Resource[]>([]);
-
-  // Notification State
-  const [notifications, setNotifications] = useState<FileRecord[]>([]);
 
   // Grading State
   const [editingFile, setEditingFile] = useState<number | null>(null);
@@ -31,6 +28,7 @@ export default function TrainerDashboard({ user }: { user: User }) {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadDesc, setUploadDesc] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   // Attendance State
   const [attDate, setAttDate] = useState(new Date().toISOString().split('T')[0]);
@@ -76,16 +74,6 @@ export default function TrainerDashboard({ user }: { user: User }) {
     const relevantFiles = allFiles.filter(f => myTraineesIds.includes(f.user_id));
     setFiles(relevantFiles);
 
-    // Notification Logic: Detect new uploads not seen by trainer yet
-    const seenIds = JSON.parse(localStorage.getItem(`seen_uploads_trainer_${user.id}`) || '[]');
-    // Filter files that are NOT graded yet (optional preference) or just strictly "not seen"
-    // Using ID sort for "newest" as date string is localized
-    const newUploads = relevantFiles
-        .filter(f => !seenIds.includes(f.id))
-        .sort((a, b) => b.id - a.id);
-    
-    setNotifications(newUploads);
-
     // Meetings
     const allMeetings = db.getMeetings();
     const relevantMeetings = allMeetings
@@ -105,29 +93,9 @@ export default function TrainerDashboard({ user }: { user: User }) {
     setResources(relevantResources);
   };
 
-  const dismissNotification = (fileId: number) => {
-      const seenIds = JSON.parse(localStorage.getItem(`seen_uploads_trainer_${user.id}`) || '[]');
-      if (!seenIds.includes(fileId)) {
-          const updatedSeenIds = [...seenIds, fileId];
-          localStorage.setItem(`seen_uploads_trainer_${user.id}`, JSON.stringify(updatedSeenIds));
-      }
-      setNotifications(prev => prev.filter(n => n.id !== fileId));
-  };
-
-  const markAllAsSeen = () => {
-      const seenIds = JSON.parse(localStorage.getItem(`seen_uploads_trainer_${user.id}`) || '[]');
-      const currentNotifIds = notifications.map(n => n.id);
-      const updated = [...new Set([...seenIds, ...currentNotifIds])];
-      localStorage.setItem(`seen_uploads_trainer_${user.id}`, JSON.stringify(updated));
-      setNotifications([]);
-  };
-
   const handleGrade = (fileId: number) => {
       db.gradeFile(fileId, Number(score), feedback);
       
-      // Auto-mark as seen when graded
-      dismissNotification(fileId);
-
       setEditingFile(null);
       setScore('');
       setFeedback('');
@@ -137,9 +105,6 @@ export default function TrainerDashboard({ user }: { user: User }) {
       setEditingFile(file.id);
       setScore(file.score?.toString() || '');
       setFeedback(file.feedback || '');
-      
-      // Mark as seen when opening grading interface
-      dismissNotification(file.id);
   }
 
   const handleAiGrade = async (file: FileRecord) => {
@@ -209,20 +174,27 @@ export default function TrainerDashboard({ user }: { user: User }) {
           alert('يرجى اختيار المتدرب والملف');
           return;
       }
+
+      if (!db.isCloudConnected) {
+          alert("عذراً، يجب أن تكون متصلاً بالإنترنت لرفع الملفات إلى السحابة.");
+          return;
+      }
+
       setIsUploading(true);
+      setUploadProgress(0);
       try {
-        let fileUrl = undefined;
-        if (db.isCloudConnected) {
-            fileUrl = await db.uploadFileToCloud(uploadFile, 'trainer_uploads');
-        }
+        const fileUrl = await db.uploadFileToCloud(uploadFile, 'trainer_uploads', (progress) => {
+            setUploadProgress(progress);
+        });
 
         await db.addFile(Number(uploadTraineeId), uploadFile.name, uploadDesc || 'ملف من مسئول المجموعة', fileUrl);
-        alert('تم رفع الملف للمتدرب بنجاح');
+        alert('تم رفع الملف وتخزينه سحابياً بنجاح ✅');
         setUploadFile(null);
         setUploadDesc('');
         setUploadTraineeId('');
+        setUploadProgress(0);
       } catch (error: any) {
-        alert("خطأ في الرفع: " + error.message);
+        alert("فشل الرفع: " + error.message);
       } finally {
         setIsUploading(false);
       }
@@ -232,7 +204,7 @@ export default function TrainerDashboard({ user }: { user: User }) {
       if (file.file_url) {
           window.open(file.file_url, '_blank');
       } else {
-          alert(`هذا ملف محلي تجريبي فقط: ${file.filename}`);
+          alert(`هذا الملف غير متوفر سحابياً.`);
       }
   };
 
@@ -260,57 +232,16 @@ export default function TrainerDashboard({ user }: { user: User }) {
       return 'لمجموعتي';
   }
 
+  const getFileIcon = (filename: string) => {
+      const ext = filename.split('.').pop()?.toLowerCase();
+      if (['jpg', 'jpeg', 'png', 'gif'].includes(ext || '')) return <ImageIcon size={14} />;
+      if (['mp4', 'mov', 'avi'].includes(ext || '')) return <PlayCircle size={14} />;
+      return <File size={14} />;
+  }
+
   return (
     <div className="space-y-6">
       
-      {/* Notifications Section */}
-      {notifications.length > 0 && (
-        <div className="space-y-3 animate-pulse">
-            <div className="flex justify-between items-center mb-1">
-                <h4 className="font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                    <Bell size={18} className="text-orange-500" />
-                    تنبيهات الملفات الجديدة
-                </h4>
-                <button 
-                    onClick={markAllAsSeen}
-                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                >
-                    تحديد الكل كمقروء
-                </button>
-            </div>
-            {notifications.map(n => (
-                <div key={n.id} className="bg-orange-50 dark:bg-orange-900/20 border-l-4 border-orange-400 p-4 rounded-r-xl shadow-md flex justify-between items-start transition-all transform hover:scale-[1.01]">
-                    <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                            <span className="font-bold text-gray-800 dark:text-gray-100">{n.user_name}</span>
-                            <span className="text-sm text-gray-500">قام برفع ملف جديد</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                            <File size={14} />
-                            <span className="font-medium">{n.filename}</span>
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">{n.upload_date}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <button 
-                            onClick={() => startGrading(n)}
-                            className="bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 px-3 py-1.5 rounded-lg text-xs font-bold border border-orange-200 dark:border-orange-800 hover:bg-orange-50 dark:hover:bg-orange-900/30"
-                        >
-                            تصحيح الآن
-                        </button>
-                        <button 
-                            onClick={() => dismissNotification(n.id)}
-                            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-colors"
-                            title="إخفاء التنبيه"
-                        >
-                            <X size={18} />
-                        </button>
-                    </div>
-                </div>
-            ))}
-        </div>
-      )}
-
       {/* Meetings Alert */}
       {meetings.length > 0 && (
           <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-600 dark:border-blue-500 p-4 rounded shadow-sm flex justify-between items-center">
@@ -358,7 +289,7 @@ export default function TrainerDashboard({ user }: { user: User }) {
              </div>
            </Card>
 
-           <Card title="رفع ملف لمتدرب">
+           <Card title="رفع ملف لمتدرب (سحابي)">
                 <form onSubmit={handleUploadForTrainee} className="space-y-4">
                      <Select 
                         label="اختر المتدرب"
@@ -372,12 +303,13 @@ export default function TrainerDashboard({ user }: { user: User }) {
                         type="file" 
                         id="trainer-file-upload"
                         className="hidden" 
+                        accept="image/*,video/*,application/pdf,.doc,.docx"
                         onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
                         />
                         <label htmlFor="trainer-file-upload" className="cursor-pointer block w-full h-full">
                             <Cloud className="mx-auto text-blue-400 mb-2 group-hover:scale-110 transition-transform" size={20} />
                             <span className="text-xs text-blue-800 dark:text-blue-300 font-medium truncate block">
-                                {uploadFile ? uploadFile.name : 'اختر الملف لرفعه'}
+                                {uploadFile ? uploadFile.name : 'اختر صورة/فيديو/ملف'}
                             </span>
                         </label>
                     </div>
@@ -387,8 +319,15 @@ export default function TrainerDashboard({ user }: { user: User }) {
                     onChange={(e) => setUploadDesc(e.target.value)} 
                     placeholder="مثال: الواجب المصحح..."
                     />
+
+                    {isUploading && (
+                         <div className="animate-fadeIn">
+                             <ProgressBar progress={uploadProgress} label="جاري الرفع إلى السحابة..." />
+                         </div>
+                    )}
+
                     <Button type="submit" className="w-full text-sm" disabled={!uploadFile || !uploadTraineeId || isUploading} isLoading={isUploading}>
-                        <Send size={14} /> {isUploading ? 'جاري الرفع...' : 'رفع'}
+                        <Send size={14} /> {isUploading ? 'جاري الرفع...' : 'رفع وحفظ'}
                     </Button>
                 </form>
            </Card>
@@ -470,18 +409,22 @@ export default function TrainerDashboard({ user }: { user: User }) {
                                         </Badge>
                                     </div>
                                     <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
-                                        <File size={14} /> {f.filename}
+                                        {getFileIcon(f.filename)} {f.filename}
                                         <span className="text-gray-300 dark:text-gray-600">|</span>
                                         {f.upload_date}
                                     </p>
                                     <p className="text-gray-700 dark:text-gray-300 mt-2 bg-gray-50 dark:bg-gray-700/50 p-2 rounded text-sm italic">"{f.description}"</p>
                                     
-                                    <button 
-                                        onClick={() => handleDownloadFile(f)}
-                                        className="text-sm bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 hover:bg-blue-200 px-3 py-1 rounded mt-3 flex items-center gap-2 transition-colors"
-                                    >
-                                        <Download size={14} /> تحميل الملف
-                                    </button>
+                                    {f.file_url && (
+                                        <div className="flex gap-2 mt-3">
+                                            <button 
+                                                onClick={() => handleDownloadFile(f)}
+                                                className="text-sm bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 hover:bg-blue-200 px-3 py-1 rounded flex items-center gap-2 transition-colors"
+                                            >
+                                                <Download size={14} /> تحميل/عرض
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                                 {f.status === 'graded' && !editingFile && (
                                     <div className="text-left">

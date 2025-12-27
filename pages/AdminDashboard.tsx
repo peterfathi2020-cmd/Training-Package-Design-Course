@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
 import { User, FileRecord, Resource, Meeting, LoginLog } from '../types';
-import { Button, Input, Select, Card, Badge } from '../components/ui';
+import { Button, Input, Select, Card, Badge, ProgressBar } from '../components/ui';
 import { Users, FileText, Video, ShieldAlert, Download, UploadCloud, Mail, Lock, Phone, User as UserIcon, Link as LinkIcon, Type, Briefcase, BarChart, Library, BookOpen, AlignLeft, MessageCircle, ExternalLink, Calendar, Upload, Send, FileSpreadsheet, Megaphone, Activity, CheckCircle, Trash2, Edit, X, Cloud, Database, RefreshCw, Share2, Copy, Wifi, WifiOff, Globe, Sparkles } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 
@@ -64,6 +64,7 @@ export default function AdminDashboard() {
   const [uploadDesc, setUploadDesc] = useState('');
   const [uploadLink, setUploadLink] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   
   useEffect(() => {
     refreshData();
@@ -279,11 +280,20 @@ export default function AdminDashboard() {
           alert('يرجى اختيار المتدرب وملف أو رابط');
           return;
       }
+      
+      if (uploadFile && !db.isCloudConnected) {
+          alert("عذراً، يجب أن تكون متصلاً بالإنترنت لرفع الملفات إلى السحابة.");
+          return;
+      }
+
       setIsUploading(true);
+      setUploadProgress(0);
       try {
         let fileUrl = uploadLink || undefined;
         if (uploadFile && db.isCloudConnected) {
-             fileUrl = await db.uploadFileToCloud(uploadFile, 'admin_uploads');
+             fileUrl = await db.uploadFileToCloud(uploadFile, 'admin_uploads', (progress) => {
+                 setUploadProgress(progress);
+             });
         }
 
         await db.addFile(
@@ -297,6 +307,7 @@ export default function AdminDashboard() {
         setUploadDesc('');
         setUploadLink('');
         setUploadTraineeId('');
+        setUploadProgress(0);
       } catch (error: any) {
          alert("خطأ في الرفع: " + error.message);
       } finally {
@@ -660,12 +671,13 @@ export default function AdminDashboard() {
                             type="file" 
                             id="admin-file-upload"
                             className="hidden" 
+                            accept="image/*,video/*,application/pdf,.doc,.docx"
                             onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
                            />
                            <label htmlFor="admin-file-upload" className="cursor-pointer block w-full h-full">
                                <UploadCloud className="mx-auto text-blue-400 mb-2 group-hover:scale-110 transition-transform" size={24} />
                                <span className="text-xs text-blue-800 dark:text-blue-300 font-medium">
-                                   {uploadFile ? uploadFile.name : 'اختر ملفاً من جهازك'}
+                                   {uploadFile ? uploadFile.name : 'اختر صورة/فيديو/ملف'}
                                </span>
                            </label>
                        </div>
@@ -687,6 +699,13 @@ export default function AdminDashboard() {
                         onChange={(e) => setUploadDesc(e.target.value)} 
                         placeholder="مثال: تعيين إضافي..."
                        />
+                       
+                       {isUploading && (
+                         <div className="animate-fadeIn">
+                             <ProgressBar progress={uploadProgress} label="جاري الرفع إلى السحابة..." />
+                         </div>
+                       )}
+
                        <Button type="submit" className="w-full" disabled={!uploadTraineeId || (!uploadFile && !uploadLink) || isUploading} isLoading={isUploading}>
                            <Send size={16} /> {isUploading ? 'جاري الرفع...' : 'رفع إلى السحابة'}
                        </Button>

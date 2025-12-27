@@ -1,7 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { User, FileRecord } from '../types';
+import { User, FileRecord, Resource } from '../types';
 import { db } from '../services/db';
-import { LogOut, Search, X, User as UserIcon, FileText, Moon, Sun, Bell } from 'lucide-react';
+import { LogOut, Search, X, User as UserIcon, FileText, Moon, Sun, Bell, Check, Trash2, BookOpen } from 'lucide-react';
+
+// Unified Notification Type
+type NotificationItem = {
+    uniqueId: string;
+    id: number;
+    type: 'upload' | 'grade' | 'resource';
+    title: string;
+    subtitle: string;
+    date: string;
+    badge?: string;
+    badgeColor?: string;
+    icon?: React.ReactNode;
+};
 
 export default function Layout({ 
     children, 
@@ -29,16 +42,24 @@ export default function Layout({
     const searchRef = useRef<HTMLDivElement>(null);
     const [announcement, setAnnouncement] = useState('');
 
+    // Notifications State
+    const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+    const [showNotifications, setShowNotifications] = useState(false);
+    const notifRef = useRef<HTMLDivElement>(null);
+
     useEffect(() => {
         // Load Announcement
         setAnnouncement(db.getAnnouncement());
     }, []);
 
-    // Handle click outside to close search results
+    // Handle click outside to close search and notifications
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
             if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
                 setShowResults(false);
+            }
+            if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
+                setShowNotifications(false);
             }
         }
         document.addEventListener("mousedown", handleClickOutside);
@@ -46,6 +67,110 @@ export default function Layout({
             document.removeEventListener("mousedown", handleClickOutside);
         };
     }, []);
+
+    // Fetch Notifications System
+    useEffect(() => {
+        const fetchNotifs = () => {
+            // Using v2 for string IDs
+            const seenIds = JSON.parse(localStorage.getItem(`seen_notifs_v2_${user.id}`) || '[]');
+            let notifList: NotificationItem[] = [];
+    
+            if (user.role === 'trainer') {
+                const myTrainees = db.getTraineesByTrainer(user.id).map(t => t.id);
+                const allFiles = db.getFiles();
+                
+                // Trainers see NEW uploads
+                allFiles.forEach(f => {
+                    if (myTrainees.includes(f.user_id)) {
+                        const uniqueId = `file_${f.id}`;
+                        // We consider it "new" if not seen. We can also check status 'pending' if we only want pending ones.
+                        // But let's show all unseen uploads.
+                        if (!seenIds.includes(uniqueId)) {
+                            notifList.push({
+                                uniqueId,
+                                id: f.id,
+                                type: 'upload',
+                                title: f.user_name || 'متدرب',
+                                subtitle: `قام برفع ملف: ${f.filename}`,
+                                date: f.upload_date,
+                                icon: <FileText size={16} />,
+                                badge: 'جديد',
+                                badgeColor: 'bg-orange-100 text-orange-700'
+                            });
+                        }
+                    }
+                });
+            } else if (user.role === 'trainee') {
+                 const allFiles = db.getFiles();
+                 
+                 // 1. Graded Files
+                 allFiles.forEach(f => {
+                     if (f.user_id === user.id && f.status === 'graded') {
+                         const uniqueId = `grade_${f.id}`;
+                         if (!seenIds.includes(uniqueId)) {
+                             notifList.push({
+                                 uniqueId,
+                                 id: f.id,
+                                 type: 'grade',
+                                 title: 'تم تصحيح الواجب',
+                                 subtitle: f.filename,
+                                 date: f.upload_date, // approximate date
+                                 badge: f.score ? `${f.score}/100` : undefined,
+                                 badgeColor: (f.score || 0) >= 50 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700',
+                                 icon: <Check size={16} />
+                             });
+                         }
+                     }
+                 });
+
+                 // 2. New Resources
+                 const allResources = db.getResources();
+                 allResources.forEach(r => {
+                     const isForMe = r.target_audience === 'all' || (r.target_audience === 'group' && r.uploaded_by === user.assigned_trainer_id);
+                     if (isForMe) {
+                         const uniqueId = `res_${r.id}`;
+                         if (!seenIds.includes(uniqueId)) {
+                             const sender = r.uploaded_by === 1 ? 'الإدارة' : 'مسئول المجموعة';
+                             notifList.push({
+                                 uniqueId,
+                                 id: r.id,
+                                 type: 'resource',
+                                 title: `مصدر جديد (${sender})`,
+                                 subtitle: r.title,
+                                 date: new Date(r.created_at).toLocaleDateString('ar-EG'),
+                                 icon: <BookOpen size={16} />,
+                                 badgeColor: 'bg-purple-100 text-purple-700'
+                             });
+                         }
+                     }
+                 });
+            }
+            
+            // Sort by ID (approximate time order if IDs are timestamps)
+            notifList.sort((a, b) => b.id - a.id);
+            setNotifications(notifList);
+        };
+    
+        fetchNotifs();
+        const unsub = db.subscribe(fetchNotifs);
+        return unsub;
+    }, [user.id, user.role]);
+    
+    const dismissNotification = (uniqueId: string) => {
+        const seenIds = JSON.parse(localStorage.getItem(`seen_notifs_v2_${user.id}`) || '[]');
+        if (!seenIds.includes(uniqueId)) {
+            localStorage.setItem(`seen_notifs_v2_${user.id}`, JSON.stringify([...seenIds, uniqueId]));
+        }
+        setNotifications(prev => prev.filter(n => n.uniqueId !== uniqueId));
+    };
+    
+    const clearAllNotifications = () => {
+        const seenIds = JSON.parse(localStorage.getItem(`seen_notifs_v2_${user.id}`) || '[]');
+        const currentIds = notifications.map(n => n.uniqueId);
+        localStorage.setItem(`seen_notifs_v2_${user.id}`, JSON.stringify([...seenIds, ...currentIds]));
+        setNotifications([]);
+        setShowNotifications(false);
+    };
 
     const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
         const query = e.target.value;
@@ -226,6 +351,74 @@ export default function Layout({
 
                     {/* Right Side Actions */}
                     <div className="flex items-center gap-3 flex-shrink-0">
+                        {/* Notifications Bell */}
+                        {(user.role === 'trainer' || user.role === 'trainee') && (
+                            <div className="relative" ref={notifRef}>
+                                <button
+                                    onClick={() => setShowNotifications(!showNotifications)}
+                                    className="p-2 relative text-navy dark:text-gray-300 hover:text-primary dark:hover:text-primary hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-all duration-300 shadow-sm border border-transparent hover:border-gray-200 dark:hover:border-gray-600"
+                                    title="التنبيهات"
+                                >
+                                    <Bell size={20} />
+                                    {notifications.length > 0 && (
+                                        <span className="absolute top-1 right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse"></span>
+                                    )}
+                                </button>
+                                
+                                {showNotifications && (
+                                    <div className="absolute top-full left-0 mt-2 w-80 bg-white dark:bg-gray-800 shadow-xl rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden z-50 animate-fadeIn origin-top-left">
+                                        <div className="p-3 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-700/30">
+                                            <h3 className="font-bold text-sm text-navy dark:text-white">التنبيهات</h3>
+                                            {notifications.length > 0 && (
+                                                <button onClick={clearAllNotifications} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">
+                                                    تحديد الكل كمقروء
+                                                </button>
+                                            )}
+                                        </div>
+                                        <div className="max-h-80 overflow-y-auto">
+                                            {notifications.length === 0 ? (
+                                                <div className="p-6 text-center text-gray-400">
+                                                    <Check size={32} className="mx-auto mb-2 opacity-50" />
+                                                    <p className="text-sm">لا توجد تنبيهات جديدة</p>
+                                                </div>
+                                            ) : (
+                                                <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                                                    {notifications.map(n => (
+                                                        <div key={n.uniqueId} className="p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors flex gap-3 relative group">
+                                                            <div className={`p-2 rounded-full h-fit flex-shrink-0 ${n.type === 'upload' ? 'bg-orange-100 text-orange-600' : n.type === 'grade' ? 'bg-green-100 text-green-600' : 'bg-purple-100 text-purple-600'}`}>
+                                                                {n.icon || <FileText size={16} />}
+                                                            </div>
+                                                            <div className="flex-1">
+                                                                <p className="text-sm font-bold text-navy dark:text-gray-200 mb-0.5">
+                                                                    {n.title}
+                                                                </p>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                                                                    {n.subtitle}
+                                                                </p>
+                                                                {n.badge && (
+                                                                     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${n.badgeColor}`}>
+                                                                        {n.badge}
+                                                                     </span>
+                                                                )}
+                                                                <p className="text-[10px] text-gray-400 mt-1 text-left" dir="ltr">{n.date}</p>
+                                                            </div>
+                                                            <button 
+                                                                onClick={() => dismissNotification(n.uniqueId)}
+                                                                className="absolute top-2 left-2 p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded dark:hover:bg-red-900/20 opacity-0 group-hover:opacity-100 transition-all"
+                                                                title="إخفاء"
+                                                            >
+                                                                <X size={14} />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         {/* Theme Toggle */}
                         <button 
                             onClick={toggleTheme}

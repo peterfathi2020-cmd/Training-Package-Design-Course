@@ -1,5 +1,5 @@
 import { User, FileRecord, Meeting, UserRole, Resource, AttendanceRecord, LoginLog, FirebaseConfig } from '../types';
-import { initializeApp, FirebaseApp, getApps, getApp } from 'firebase/app';
+import { initializeApp, FirebaseApp, getApps, getApp, deleteApp } from 'firebase/app';
 import { 
     getFirestore, 
     Firestore, 
@@ -93,17 +93,24 @@ class DatabaseService {
 
   private async initializeFirebase(config: FirebaseConfig) {
       try {
-          // Check if app already initialized to avoid errors in dev HMR
-          const apps = getApps();
-          if (apps.length === 0) {
-              this.firebaseApp = initializeApp(config);
-          } else {
-              this.firebaseApp = getApp();
+          // Handle HMR (Hot Module Replacement) scenarios
+          // If an app exists, delete it to ensure we get a fresh instance associated with the current module context.
+          // This fixes "Service firestore is not available" errors caused by stale app instances.
+          if (getApps().length > 0) {
+              try {
+                  const currentApp = getApp();
+                  await deleteApp(currentApp);
+                  console.log("Deleted existing Firebase App for HMR refresh.");
+              } catch (e) {
+                  console.warn("Failed to delete existing app:", e);
+              }
           }
 
+          this.firebaseApp = initializeApp(config);
+
           if (this.firebaseApp) {
-              // Fix: Use standard getFirestore for maximum compatibility.
-              // Avoids 'Service firestore is not available' error caused by initializeFirestore in some bundles.
+              // Use getFirestore directly. 
+              // Because we just created the app in this module scope, imports should match.
               this.firestore = getFirestore(this.firebaseApp);
               this.storage = getStorage(this.firebaseApp);
               this.isCloudConnected = true;
