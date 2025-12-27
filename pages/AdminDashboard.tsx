@@ -294,7 +294,8 @@ export default function AdminDashboard({ user }: { user: User }) {
       try {
         let fileUrl = uploadLink || undefined;
         if (uploadFile && db.isCloudConnected) {
-             fileUrl = await db.uploadFileToCloud(uploadFile, 'admin_uploads', (progress) => {
+            // Upload to the specific Peter Fathi Admin Folder
+             fileUrl = await db.uploadFileToCloud(uploadFile, 'Admin_Uploads', (progress) => {
                  setUploadProgress(progress);
              });
         }
@@ -496,7 +497,7 @@ export default function AdminDashboard({ user }: { user: User }) {
                             </h2>
                             <p className="text-blue-100 text-sm">
                                 {isCloud 
-                                    ? 'يتم الآن مزامنة جميع البيانات لحظياً بين جميع الأجهزة (الإدارة، المسئولين، المتدربين).'
+                                    ? 'يتم الآن مزامنة جميع البيانات لحظياً وتخزينها في السحابة المركزية (PeterFathi_Official_Cloud).'
                                     : 'جاري محاولة الاتصال... تأكد من اتصالك بالإنترنت.'}
                             </p>
                         </div>
@@ -535,7 +536,8 @@ export default function AdminDashboard({ user }: { user: User }) {
                     </button>
                 </div>
             </div>
-
+            
+            {/* Stats Cards ... */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <Card onClick={() => setActiveTab(2)} className="text-center flex flex-col items-center justify-center p-6 transition-transform hover:-translate-y-1">
                     <div className="bg-blue-100 dark:bg-blue-900/30 p-4 rounded-full text-blue-600 dark:text-blue-400 mb-4 inline-flex shadow-sm">
@@ -572,8 +574,9 @@ export default function AdminDashboard({ user }: { user: User }) {
                     <span className="text-xs text-purple-600 font-bold bg-purple-100 dark:bg-purple-900/30 px-2 py-0.5 rounded-full mt-2 inline-block">إنجاز</span>
                 </Card>
             </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+             
+             {/* Charts */}
+             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                  <Card title="تحليل أداء المجموعات (Visual Analytics)" className="overflow-hidden">
                     <div className="space-y-4">
                         <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
@@ -637,10 +640,10 @@ export default function AdminDashboard({ user }: { user: User }) {
                     </div>
                 </Card>
             </div>
+
           </div>
       )}
-
-      {/* Other Tabs Content Remains Same (Hidden for Brevity but Preserved) */}
+      
       {activeTab === 1 && (
         <div className="grid lg:grid-cols-2 gap-6">
           <Card title="إضافة حساب مسئول مجموعة جديد">
@@ -702,7 +705,7 @@ export default function AdminDashboard({ user }: { user: User }) {
           </Card>
         </div>
       )}
-
+      
       {activeTab === 2 && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-1 space-y-6">
@@ -783,7 +786,9 @@ export default function AdminDashboard({ user }: { user: User }) {
             </div>
 
             <div className="lg:col-span-2 space-y-6">
-                <Card title="إدارة المتدربين المسجلين" action={<Badge color="green">{traineesList.length} متدرب</Badge>}>
+                 {/* Trainee List & Files List */}
+                 {/* ... (Existing code) ... */}
+                 <Card title="إدارة المتدربين المسجلين" action={<Badge color="green">{traineesList.length} متدرب</Badge>}>
                      <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
                         <table className="w-full text-sm text-right">
                             <thead className="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400 sticky top-0">
@@ -814,12 +819,11 @@ export default function AdminDashboard({ user }: { user: User }) {
                                         </tr>
                                     );
                                 })}
-                                {traineesList.length === 0 && <tr><td colSpan={4} className="p-4 text-center text-gray-400">لا يوجد متدربين</td></tr>}
+                                {traineesList.length === <tr><td colSpan={4} className="p-4 text-center text-gray-400">لا يوجد متدربين</td></tr>}
                             </tbody>
                         </table>
                     </div>
                 </Card>
-
                 <Card title="سجل الملفات المتبادلة (Cloud)" action={<div className="text-xs text-gray-400 flex items-center gap-1"><Maximize2 size={12}/> اضغط على الصف للتفاصيل</div>}>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-right">
@@ -937,9 +941,279 @@ export default function AdminDashboard({ user }: { user: User }) {
             </div>
         </div>
       )}
+      
+      {activeTab === 3 && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-1 space-y-6">
+                <Card title="إضافة مصدر تعليمي جديد">
+                    <form onSubmit={handleAddResource} className="space-y-4">
+                        <Input icon={BookOpen} label="عنوان المصدر" value={rTitle} onChange={(e) => setRTitle(e.target.value)} required placeholder="اسم الكتاب / الفيديو" />
+                        <div className="mb-4">
+                            <label className="block text-sm font-bold text-navy dark:text-gray-300 mb-2">نوع المصدر</label>
+                            <select 
+                                value={rType} 
+                                onChange={(e) => setRType(e.target.value as any)}
+                                className="w-full px-3 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20"
+                            >
+                                <option value="pdf">ملف PDF</option>
+                                <option value="video">فيديو</option>
+                                <option value="link">رابط خارجي</option>
+                            </select>
+                        </div>
+                        <Input icon={LinkIcon} label="رابط المصدر" value={rLink} onChange={(e) => setRLink(e.target.value)} required placeholder="https://..." />
+                        
+                        <div>
+                            <label className="block text-sm font-bold text-navy dark:text-gray-300 mb-2">وصف المصدر</label>
+                            <div className="flex gap-2 mb-2">
+                                <input 
+                                    className="flex-1 px-3 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                    value={rDesc}
+                                    onChange={(e) => setRDesc(e.target.value)}
+                                    placeholder="وصف قصير للمحتوى..."
+                                />
+                                <button 
+                                    type="button"
+                                    onClick={handleAiResourceDesc}
+                                    disabled={isAiLoading || !rTitle}
+                                    className="bg-purple-100 hover:bg-purple-200 dark:bg-purple-900/30 dark:hover:bg-purple-900/50 text-purple-700 dark:text-purple-300 p-2.5 rounded-xl transition-colors"
+                                    title="توليد وصف بالذكاء الاصطناعي"
+                                >
+                                    <Sparkles size={20} className={isAiLoading ? 'animate-spin' : ''} />
+                                </button>
+                            </div>
+                        </div>
 
-      {/* Tabs 3, 4, 5 content omitted for brevity, logic remains similar */}
-      {/* ... (Previous code for tabs 3, 4, 5) ... */}
+                        <Button type="submit" className="w-full">
+                            <Upload size={18} /> نشر في المكتبة
+                        </Button>
+                    </form>
+                </Card>
+            </div>
+
+            <div className="lg:col-span-2">
+                <Card title="محتوى المكتبة والمصادر" action={<Badge color="purple">{resources.length} عنصر</Badge>}>
+                    <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
+                        {resources.map((res) => (
+                            <div key={res.id} className="flex items-start gap-4 p-4 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl group hover:shadow-md transition-all">
+                                <div className="p-3 bg-white dark:bg-gray-700 rounded-lg shadow-sm text-purple-600 dark:text-purple-400">
+                                    {res.type === 'pdf' ? <BookOpen size={24} /> : res.type === 'video' ? <Video size={24} /> : <LinkIcon size={24} />}
+                                </div>
+                                <div className="flex-1">
+                                    <div className="flex justify-between items-start">
+                                        <h4 className="font-bold text-navy dark:text-white text-lg">{res.title}</h4>
+                                        <button 
+                                            onClick={() => {
+                                                if(window.confirm('حذف هذا المصدر؟')) db.deleteResource(res.id);
+                                            }}
+                                            className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </div>
+                                    <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">{res.description}</p>
+                                    <div className="flex items-center gap-4 mt-3">
+                                        <a 
+                                            href={res.link} 
+                                            target="_blank" 
+                                            rel="noreferrer"
+                                            className="text-sm font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                                        >
+                                            <ExternalLink size={14} /> فتح الرابط
+                                        </a>
+                                        <span className="text-xs text-gray-400">{new Date(res.created_at).toLocaleDateString('ar-EG')}</span>
+                                        <Badge color={res.target_audience === 'all' ? 'yellow' : 'blue'}>
+                                            {res.target_audience === 'all' ? 'عام للجميع' : 'مخصص'}
+                                        </Badge>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                        {resources.length === 0 && (
+                            <div className="text-center py-10 text-gray-400">
+                                <Library size={48} className="mx-auto mb-4 opacity-20" />
+                                <p>المكتبة فارغة حالياً. قم بإضافة مصادر جديدة.</p>
+                            </div>
+                        )}
+                    </div>
+                </Card>
+            </div>
+        </div>
+      )}
+
+      {activeTab === 4 && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-1 space-y-6">
+                <Card title="جدولة اجتماع جديد">
+                    <form onSubmit={handleAddMeeting} className="space-y-4">
+                        <Input icon={Video} label="عنوان الاجتماع / الموضوع" value={mTopic} onChange={(e) => setMTopic(e.target.value)} required placeholder="ورشة عمل..." />
+                        <Input icon={LinkIcon} label="رابط الاجتماع (Zoom/Teams)" value={mLink} onChange={(e) => setMLink(e.target.value)} required placeholder="https://zoom.us/j/..." />
+                        
+                        <div className="mb-4">
+                            <label className="block text-sm font-bold text-navy dark:text-gray-300 mb-2">الجمهور المستهدف</label>
+                            <select 
+                                value={mTarget} 
+                                onChange={(e) => setMTarget(e.target.value as any)}
+                                className="w-full px-3 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20"
+                            >
+                                <option value="all">جميع المستخدمين</option>
+                                <option value="trainers">مسئولي المجموعات فقط</option>
+                                <option value="group">مجموعة محددة</option>
+                            </select>
+                        </div>
+
+                        {mTarget === 'group' && (
+                            <Select 
+                                label="اختر المجموعة"
+                                value={mGroupId}
+                                onChange={(e) => setMGroupId(e.target.value)}
+                                options={trainers.map(t => ({ label: `مجموعة: ${t.name}`, value: t.id }))}
+                            />
+                        )}
+
+                        <Button type="submit" className="w-full">
+                            <Calendar size={18} /> نشر الاجتماع
+                        </Button>
+                    </form>
+                </Card>
+            </div>
+
+            <div className="lg:col-span-2">
+                <Card title="الاجتماعات المجدولة" action={<Badge color="blue">{meetings.length} اجتماع</Badge>}>
+                    <div className="space-y-4">
+                        {meetings.map((m) => (
+                            <div key={m.id} className="border border-blue-100 dark:border-gray-700 rounded-xl p-4 hover:shadow-md transition-all bg-white dark:bg-gray-800">
+                                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-3 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg">
+                                            <Video size={24} />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-bold text-lg text-navy dark:text-white">{m.topic}</h4>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                تم النشر: {new Date(m.created_at).toLocaleDateString('ar-EG')}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Badge color={m.target_audience === 'all' ? 'green' : m.target_audience === 'trainers' ? 'purple' : 'orange'}>
+                                            {m.target_audience === 'all' ? 'للجميع' : m.target_audience === 'trainers' ? 'للمسئولين' : 'لمجموعة محددة'}
+                                        </Badge>
+                                        <a href={m.link} target="_blank" rel="noreferrer" className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700">
+                                            انضمام
+                                        </a>
+                                    </div>
+                                </div>
+
+                                <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
+                                    <button 
+                                        onClick={() => setExpandedMeetingId(expandedMeetingId === m.id ? null : m.id)}
+                                        className="flex items-center gap-2 text-sm text-gray-500 hover:text-green-600 transition-colors w-full"
+                                    >
+                                        <MessageCircle size={16} />
+                                        <span>إرسال تذكير واتساب للمدعوين</span>
+                                        {expandedMeetingId === m.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                    </button>
+                                    
+                                    {expandedMeetingId === m.id && (
+                                        <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 animate-fadeIn max-h-40 overflow-y-auto">
+                                            {getMeetingRecipients(m).map(u => (
+                                                <button 
+                                                    key={u.id}
+                                                    onClick={() => sendWhatsapp(u.phone || '', u.name, m.topic, m.link)}
+                                                    className="flex items-center gap-2 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 p-2 rounded hover:bg-green-50 dark:hover:bg-green-900/20 hover:border-green-200 dark:hover:border-green-800 transition-colors text-left"
+                                                >
+                                                    <div className="bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400 p-1 rounded-full">
+                                                        <MessageCircle size={12} />
+                                                    </div>
+                                                    <span className="truncate">{u.name}</span>
+                                                </button>
+                                            ))}
+                                            {getMeetingRecipients(m).length === 0 && (
+                                                <p className="col-span-full text-center text-xs text-gray-400">لا توجد أرقام هاتف مسجلة لهؤلاء المستخدمين.</p>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                        {meetings.length === 0 && (
+                            <div className="text-center py-10 text-gray-400">
+                                <Calendar size={48} className="mx-auto mb-4 opacity-20" />
+                                <p>لا توجد اجتماعات مجدولة.</p>
+                            </div>
+                        )}
+                    </div>
+                </Card>
+            </div>
+        </div>
+      )}
+
+      {activeTab === 5 && (
+          <div className="space-y-6">
+              <Card title="إدارة الإعلانات العامة">
+                  <div className="flex gap-4 items-start">
+                      <div className="flex-1">
+                          <label className="block text-sm font-bold text-navy dark:text-gray-300 mb-2">نص الإعلان (يظهر في الشريط العلوي لجميع المستخدمين)</label>
+                          <textarea 
+                              value={announcementText}
+                              onChange={(e) => setAnnouncementText(e.target.value)}
+                              className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl h-24 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                              placeholder="اكتب تنبيهاً هاماً..."
+                          ></textarea>
+                      </div>
+                      <Button onClick={handleUpdateAnnouncement} className="mt-8 h-fit">
+                          <Megaphone size={18} /> تحديث
+                      </Button>
+                  </div>
+              </Card>
+
+              <div className="grid md:grid-cols-2 gap-6">
+                  <Card title="النسخ الاحتياطي (Backup)">
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                          قم بتحميل نسخة كاملة من قاعدة البيانات (users, files, meetings) بصيغة JSON لاستعادتها لاحقاً.
+                      </p>
+                      <div className="flex flex-col gap-4">
+                          <Button onClick={() => db.exportDB()} variant="secondary" className="w-full justify-between">
+                              <span>تصدير البيانات (Download)</span>
+                              <Download size={18} />
+                          </Button>
+                          
+                          <div className="border-t border-gray-100 dark:border-gray-700 pt-4">
+                              <p className="text-xs font-bold text-navy dark:text-gray-300 mb-2">استعادة نسخة سابقة:</p>
+                              <div className="flex gap-2">
+                                  <input 
+                                      type="file" 
+                                      accept=".json"
+                                      onChange={(e) => setRestoreFile(e.target.files?.[0] || null)}
+                                      className="block w-full text-xs text-gray-500 file:mr-2 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                  />
+                                  <Button onClick={handleRestoreBackup} disabled={!restoreFile} className="whitespace-nowrap px-3">
+                                      <RefreshCw size={16} /> استعادة
+                                  </Button>
+                              </div>
+                          </div>
+                      </div>
+                  </Card>
+
+                  <Card title="التقارير والبيانات">
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                          تصدير بيانات المستخدمين (المتدربين والمدربين) إلى ملف Excel/CSV.
+                      </p>
+                      <Button onClick={() => db.exportUsersToCSV()} variant="secondary" className="w-full justify-between mb-4">
+                          <span>تصدير قائمة المستخدمين (CSV)</span>
+                          <FileSpreadsheet size={18} />
+                      </Button>
+                      
+                      <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl text-xs text-blue-800 dark:text-blue-300">
+                          <h4 className="font-bold mb-1 flex items-center gap-1"><Database size={14}/> حالة النظام:</h4>
+                          <p>عدد المستخدمين: {users.length}</p>
+                          <p>عدد الملفات: {allFiles.length}</p>
+                          <p>حجم التخزين المحلي: {JSON.stringify(localStorage).length} bytes</p>
+                      </div>
+                  </Card>
+              </div>
+          </div>
+      )}
     </div>
   );
 }

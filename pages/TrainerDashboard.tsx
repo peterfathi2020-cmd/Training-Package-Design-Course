@@ -200,7 +200,8 @@ export default function TrainerDashboard({ user }: { user: User }) {
       setIsUploading(true);
       setUploadProgress(0);
       try {
-        const fileUrl = await db.uploadFileToCloud(uploadFile, 'trainer_uploads', (progress) => {
+        // Upload to Cloud Folder
+        const fileUrl = await db.uploadFileToCloud(uploadFile, 'Trainer_Exchange', (progress) => {
             setUploadProgress(progress);
         });
 
@@ -384,6 +385,8 @@ export default function TrainerDashboard({ user }: { user: User }) {
         
         {/* Sidebar: Trainees & Add Resource & Upload */}
         <div className="lg:col-span-1 space-y-6">
+           {/* ... */}
+           {/* Previous cards remain similar */}
            <Card title="تحديث بياناتي (إعدادات الحساب)">
                <div className="space-y-4">
                    <Input icon={Lock} label="كلمة المرور الجديدة" type="password" value={myPass} onChange={(e) => setMyPass(e.target.value)} placeholder="******" />

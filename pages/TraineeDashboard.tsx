@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
 import { User, FileRecord, Meeting, Resource } from '../types';
 import { Card, Button, Input, Badge, ProgressBar } from '../components/ui';
-import { Upload, Video, MessageCircle, FileText, Send, Star, MessageSquare, BookOpen, Download, Bell, X, Sparkles, Lightbulb, Image as ImageIcon, X as CloseIcon, PlayCircle, Award, Trophy, Medal, Inbox, Link as LinkIcon, ExternalLink } from 'lucide-react';
+import { Upload, Video, MessageCircle, FileText, Send, Star, MessageSquare, BookOpen, Download, Bell, X, Sparkles, Lightbulb, Image as ImageIcon, X as CloseIcon, PlayCircle, Award, Trophy, Medal, Inbox, Link as LinkIcon, ExternalLink, Rocket, Flame } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 
 export default function TraineeDashboard({ user }: { user: User }) {
@@ -112,7 +112,8 @@ export default function TraineeDashboard({ user }: { user: User }) {
     setUploadProgress(0);
 
     try {
-        const fileUrl = await db.uploadFileToCloud(selectedFile, 'trainee_uploads', (progress) => {
+        // Upload to specific Trainee Submissions folder
+        const fileUrl = await db.uploadFileToCloud(selectedFile, 'Trainee_Assignments', (progress) => {
             setUploadProgress(progress);
         });
 
@@ -191,28 +192,28 @@ export default function TraineeDashboard({ user }: { user: User }) {
       {
           id: 'first_upload',
           title: 'البداية القوية',
-          icon: <RocketIcon />,
+          icon: <Rocket />,
           color: 'bg-blue-500',
           condition: myFiles.length > 0
       },
       {
           id: 'perfect_score',
           title: 'المصمم المحترف',
-          icon: <StarIcon />,
+          icon: <Star />,
           color: 'bg-yellow-500',
           condition: myFiles.some(f => f.score === 100)
       },
       {
           id: 'active_student',
           title: 'الطالب النشيط',
-          icon: <FireIcon />,
+          icon: <Flame />,
           color: 'bg-orange-500',
           condition: myFiles.length >= 3
       },
       {
           id: 'master',
           title: 'خبير الحقائب',
-          icon: <TrophyIcon />,
+          icon: <Trophy />,
           color: 'bg-purple-600',
           condition: completedAssignments >= 5
       }
@@ -547,20 +548,3 @@ export default function TraineeDashboard({ user }: { user: User }) {
     </div>
   );
 }
-
-// Icon Components for Badges
-const RocketIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>
-);
-
-const StarIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
-);
-
-const FireIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-2.312-4.285-1.5-6C8.5 3 14.5 5 13 9c1.5-2 2.5-2 4-2 0 2-1.5 3-2 5 .5 2.5 2.5 3 2 6a4 4 0 0 1-8 0"/></svg>
-);
-
-const TrophyIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
-);

@@ -38,6 +38,9 @@ const HARDCODED_FIREBASE_CONFIG: FirebaseConfig = {
   measurementId: "G-LCR2L8KZZY"
 };
 
+// Designated Cloud Drive Root for Peter Fathi
+const MAIN_DRIVE_FOLDER = "PeterFathi_Official_Cloud";
+
 // Seed Data (Admins)
 const DEFAULT_ADMINS: User[] = [
   {
@@ -240,15 +243,22 @@ class DatabaseService {
       window.location.reload();
   }
 
-  // --- File Upload Logic ---
-  public async uploadFileToCloud(file: File, folder: string = 'files', onProgress?: (p: number) => void): Promise<string> {
+  // --- File Upload Logic (Linked to Peter Fathi's Drive Structure) ---
+  public async uploadFileToCloud(file: File, subFolder: string = 'General', onProgress?: (p: number) => void): Promise<string> {
       if (!this.isCloudConnected || !this.storage) {
           throw new Error("يجب الاتصال بالإنترنت وقاعدة البيانات السحابية لرفع الملفات.");
       }
       
-      const storageRef = ref(this.storage, `${folder}/${Date.now()}_${file.name}`);
+      // Structure: PeterFathi_Official_Cloud / Category / Filename
+      const storagePath = `${MAIN_DRIVE_FOLDER}/${subFolder}/${Date.now()}_${file.name}`;
+      const storageRef = ref(this.storage, storagePath);
+      
       const metadata = {
           contentType: file.type,
+          customMetadata: {
+              'uploaded_for': 'peterfathi2020@gmail.com',
+              'system_origin': 'Training_App_Web'
+          }
       };
 
       if (onProgress) {
